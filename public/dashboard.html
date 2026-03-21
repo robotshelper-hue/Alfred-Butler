@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Alfred — Command Centre</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --black:    #000000;
+      --white:    #FFFFFF;
+      --gold:     #FFD700;
+      --gold-dim: #B8960C;
+      --cyan:     #00E5FF;
+      --green:    #00FF88;
+      --surface:  #0A0A0A;
+      --surface2: #111111;
+      --border:   #1E1E1E;
+      --muted:    rgba(255,255,255,0.4);
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--black);
+      color: var(--white);
+      font-family: 'Georgia', 'Times New Roman', serif;
+    }
+
+    /* ── Scanline overlay ── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg, transparent, transparent 2px,
+        rgba(255,255,255,0.012) 2px, rgba(255,255,255,0.012) 4px
+      );
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── Header ── */
+    header {
+      position: relative;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1.2rem 2.5rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+
+    .header-brand {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .header-crest {
+      font-size: 2rem;
+      filter: drop-shadow(0 0 8px var(--gold));
+    }
+
+    .header-title {
+      font-size: 2rem;
+      font-weight: 700;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--white);
+      text-shadow: 0 0 16px rgba(255,215,0,0.5);
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+    }
+
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .user-avatar {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      border: 2px solid var(--gold-dim);
+      object-fit: cover;
+    }
+
+    .user-avatar-placeholder {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      border: 2px solid var(--gold-dim);
+      background: var(--surface2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+      color: var(--gold);
+    }
+
+    .user-name {
+      font-size: 1rem;
+      color: var(--muted);
+      letter-spacing: 0.05em;
+    }
+
+    .btn-logout {
+      padding: 0.5rem 1.2rem;
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--muted);
+      font-size: 0.85rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      cursor: pointer;
+      text-decoration: none;
+      transition: border-color 0.2s, color 0.2s;
+    }
+
+    .btn-logout:hover {
+      border-color: rgba(255,255,255,0.3);
+      color: var(--white);
+    }
+
+    /* ── Main layout ── */
+    main {
+      position: relative;
+      z-index: 1;
+      padding: 3rem 2.5rem;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    /* ── Welcome banner ── */
+    .welcome {
+      margin-bottom: 3rem;
+    }
+
+    .welcome-greeting {
+      font-size: clamp(1.8rem, 4vw, 2.8rem);
+      font-weight: 700;
+      color: var(--white);
+      text-shadow: 0 0 20px rgba(255,215,0,0.4);
+    }
+
+    .welcome-greeting span {
+      color: var(--gold);
+    }
+
+    .welcome-sub {
+      margin-top: 0.5rem;
+      font-size: 1.1rem;
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    /* ── Status pill ── */
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-top: 1rem;
+      padding: 0.4rem 1rem;
+      background: rgba(0,255,136,0.08);
+      border: 1px solid rgba(0,255,136,0.25);
+      border-radius: 999px;
+      font-size: 0.85rem;
+      color: var(--green);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--green);
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.3; }
+    }
+
+    /* ── Module grid ── */
+    .section-label {
+      font-size: 0.8rem;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 1.5rem;
+    }
+
+    .module-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 1.25rem;
+    }
+
+    .module-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.75rem 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .module-card:hover {
+      border-color: rgba(255,215,0,0.2);
+      box-shadow: 0 0 24px rgba(255,215,0,0.05);
+    }
+
+    .module-card.active {
+      border-color: rgba(0,229,255,0.3);
+      box-shadow: 0 0 24px rgba(0,229,255,0.06);
+    }
+
+    .module-card.locked {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+
+    .module-icon {
+      font-size: 2.2rem;
+      line-height: 1;
+    }
+
+    .module-number {
+      font-size: 0.72rem;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .module-name {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--white);
+      letter-spacing: 0.04em;
+    }
+
+    .module-desc {
+      font-size: 0.85rem;
+      color: var(--muted);
+      line-height: 1.5;
+      font-style: italic;
+    }
+
+    .module-badge {
+      display: inline-block;
+      margin-top: auto;
+      padding: 0.25rem 0.65rem;
+      border-radius: 999px;
+      font-size: 0.72rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .badge-live    { background: rgba(0,255,136,0.1); color: var(--green); border: 1px solid rgba(0,255,136,0.25); }
+    .badge-next    { background: rgba(0,229,255,0.08); color: var(--cyan); border: 1px solid rgba(0,229,255,0.25); }
+    .badge-locked  { background: rgba(255,255,255,0.04); color: var(--muted); border: 1px solid var(--border); }
+
+    /* ── Divider ── */
+    .section-divider {
+      margin: 2.5rem 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--border), transparent);
+    }
+
+    /* ── Voice control placeholder ── */
+    .voice-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 2rem;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .voice-label {
+      font-size: 0.8rem;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .voice-note {
+      font-size: 0.95rem;
+      color: rgba(255,255,255,0.35);
+      font-style: italic;
+    }
+
+    .voice-coming {
+      padding: 0.4rem 1.2rem;
+      background: rgba(0,229,255,0.06);
+      border: 1px dashed rgba(0,229,255,0.2);
+      border-radius: 999px;
+      font-size: 0.8rem;
+      color: var(--cyan);
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+    }
+
+    /* ── Footer ── */
+    footer {
+      position: relative;
+      z-index: 1;
+      padding: 1.5rem 2.5rem;
+      border-top: 1px solid var(--border);
+      text-align: center;
+      font-size: 0.78rem;
+      color: rgba(255,255,255,0.15);
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── Header ── -->
+  <header>
+    <div class="header-brand">
+      <span class="header-crest" aria-hidden="true">&#9812;</span>
+      <span class="header-title">Alfred</span>
+    </div>
+    <div class="header-right">
+      <div class="user-info">
+        <div class="user-avatar-placeholder" id="avatar-placeholder" aria-hidden="true">&#9812;</div>
+        <img id="user-avatar" class="user-avatar" src="" alt="Profile" style="display:none;" />
+        <span class="user-name" id="user-name">Loading...</span>
+      </div>
+      <a href="/auth/logout" class="btn-logout">Sign Out</a>
+    </div>
+  </header>
+
+  <!-- ── Main ── -->
+  <main>
+
+    <!-- Welcome -->
+    <div class="welcome">
+      <h1 class="welcome-greeting">Good <span id="time-of-day">evening</span>, sir Horace.</h1>
+      <p class="welcome-sub">At your service. What shall we attend to today?</p>
+      <div class="status-pill">
+        <div class="status-dot"></div>
+        Systems Online
+      </div>
+    </div>
+
+    <!-- Modules -->
+    <p class="section-label">Command Modules</p>
+    <div class="module-grid">
+
+      <div class="module-card active">
+        <div class="module-icon">&#9816;</div>
+        <div class="module-number">Module 01</div>
+        <div class="module-name">Infrastructure</div>
+        <div class="module-desc">Login, deployment pipeline, and command centre shell.</div>
+        <span class="module-badge badge-live">Live</span>
+      </div>
+
+      <div class="module-card locked">
+        <div class="module-icon">&#129504;</div>
+        <div class="module-number">Module 02</div>
+        <div class="module-name">The Brain</div>
+        <div class="module-desc">Gemini 3 Flash. British butler persona. Voice output.</div>
+        <span class="module-badge badge-next">Next</span>
+      </div>
+
+      <div class="module-card locked">
+        <div class="module-icon">&#128140;</div>
+        <div class="module-number">Module 03</div>
+        <div class="module-name">Gmail</div>
+        <div class="module-desc">Read, delete, and organise your inbox by voice.</div>
+        <span class="module-badge badge-locked">Locked</span>
+      </div>
+
+      <div class="module-card locked">
+        <div class="module-icon">&#128193;</div>
+        <div class="module-number">Module 04</div>
+        <div class="module-name">Google Drive</div>
+        <div class="module-desc">Browse folders and create documents by voice.</div>
+        <span class="module-badge badge-locked">Locked</span>
+      </div>
+
+      <div class="module-card locked">
+        <div class="module-icon">&#128197;</div>
+        <div class="module-number">Module 05</div>
+        <div class="module-name">Calendar &amp; YouTube</div>
+        <div class="module-desc">Daily briefings and background audio playback.</div>
+        <span class="module-badge badge-locked">Locked</span>
+      </div>
+
+    </div>
+
+    <div class="section-divider"></div>
+
+    <!-- Voice panel -->
+    <div class="voice-panel">
+      <span class="voice-label">Voice Control</span>
+      <p class="voice-note">"Alfred is listening for your commands, sir Horace."</p>
+      <span class="voice-coming">Activates in Module 02</span>
+    </div>
+
+  </main>
+
+  <footer>Alfred v1.0 &mdash; Module 1: Infrastructure &amp; UI</footer>
+
+  <script>
+    // ── Time of day greeting ──
+    const hour = new Date().getHours();
+    const tod = hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening';
+    document.getElementById('time-of-day').textContent = tod;
+
+    // ── Load user info ──
+    fetch('/api/user')
+      .then(r => r.json())
+      .then(user => {
+        document.getElementById('user-name').textContent = user.name || user.email;
+        if (user.picture) {
+          const img = document.getElementById('user-avatar');
+          const placeholder = document.getElementById('avatar-placeholder');
+          img.src = user.picture;
+          img.style.display = 'block';
+          placeholder.style.display = 'none';
+        }
+      })
+      .catch(() => {
+        document.getElementById('user-name').textContent = 'sir Horace';
+      });
+  </script>
+
+</body>
+</html>
