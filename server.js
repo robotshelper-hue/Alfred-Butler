@@ -9,6 +9,11 @@ const tts = require('./modules/tts');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Railway (and most PaaS) terminate TLS at their load balancer.
+// Without this, Express sees plain HTTP internally and refuses to set
+// secure: true cookies — breaking the OAuth session handshake.
+app.set('trust proxy', 1);
+
 // ── Middleware ────────────────────────────────────────────────────────────────
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -21,6 +26,7 @@ app.use(session({
   cookie: {
     secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
+    sameSite: 'lax',
     maxAge: 24 * 60 * 60 * 1000 // 24 hours
   }
 }));
