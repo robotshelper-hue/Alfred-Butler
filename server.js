@@ -3,6 +3,8 @@ const express = require('express');
 const session = require('express-session');
 const { google } = require('googleapis');
 const path = require('path');
+const brain = require('./modules/brain');
+const tts = require('./modules/tts');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -79,6 +81,7 @@ app.get('/auth/google/callback', async (req, res) => {
 });
 
 app.get('/auth/logout', (req, res) => {
+  if (req.session?.user?.id) brain.clearHistory(req.session.user.id);
   req.session.destroy(() => res.redirect('/'));
 });
 
@@ -94,7 +97,50 @@ app.get('/api/user', requireAuth, (req, res) => {
 });
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'online', name: 'Alfred', module: 1 });
+  res.json({ status: 'online', name: 'Alfred', module: 2 });
+});
+
+// ── Alfred: Brain + Voice (Module 2) ─────────────────────────────────────────
+
+/**
+ * POST /api/alfred/chat
+ * Body: { message: string }
+ * Returns: { reply: string }
+ */
+app.post('/api/alfred/chat', requireAuth, async (req, res) => {
+  const { message } = req.body;
+  if (!message?.trim()) return res.status(400).json({ error: 'No message provided' });
+
+  try {
+    const reply = await brain.chat(req.session.user.id, message.trim());
+    res.json({ reply });
+  } catch (err) {
+    console.error('[/api/alfred/chat]', err.message);
+    res.status(500).json({ error: 'Alfred encountered a difficulty, sir Horace.' });
+  }
+});
+
+/**
+ * POST /api/alfred/speak
+ * Body: { text: string }
+ * Returns: { audioBase64: string, mimeType: string } or { fallback: true, text: string }
+ */
+app.post('/api/alfred/speak', requireAuth, async (req, res) => {
+  const { text } = req.body;
+  if (!text?.trim()) return res.status(400).json({ error: 'No text provided' });
+
+  try {
+    const audio = await tts.synthesise(text.trim());
+    if (audio) {
+      res.json({ audioBase64: audio.audioBase64, mimeType: audio.mimeType });
+    } else {
+      // Graceful fallback: send sanitised text for browser TTS
+      res.json({ fallback: true, text: tts.sanitise(text.trim()) });
+    }
+  } catch (err) {
+    console.error('[/api/alfred/speak]', err.message);
+    res.json({ fallback: true, text: tts.sanitise(text.trim()) });
+  }
 });
 
 // ── Pages ─────────────────────────────────────────────────────────────────────

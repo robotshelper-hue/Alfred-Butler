@@ -12,8 +12,10 @@
       --white:    #FFFFFF;
       --gold:     #FFD700;
       --gold-dim: #B8960C;
+      --gold-faint: rgba(255,215,0,0.08);
       --cyan:     #00E5FF;
       --green:    #00FF88;
+      --red:      #FF4444;
       --surface:  #0A0A0A;
       --surface2: #111111;
       --border:   #1E1E1E;
@@ -27,15 +29,13 @@
       font-family: 'Georgia', 'Times New Roman', serif;
     }
 
-    /* ── Scanline overlay ── */
     body::before {
       content: '';
       position: fixed;
       inset: 0;
-      background: repeating-linear-gradient(
-        0deg, transparent, transparent 2px,
-        rgba(255,255,255,0.012) 2px, rgba(255,255,255,0.012) 4px
-      );
+      background: repeating-linear-gradient(0deg,
+        transparent, transparent 2px,
+        rgba(255,255,255,0.012) 2px, rgba(255,255,255,0.012) 4px);
       pointer-events: none;
       z-index: 0;
     }
@@ -47,402 +47,704 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 1.2rem 2.5rem;
+      padding: 1rem 2rem;
       border-bottom: 1px solid var(--border);
       background: var(--surface);
     }
 
-    .header-brand {
-      display: flex;
-      align-items: center;
-      gap: 1rem;
+    .brand { display: flex; align-items: center; gap: 0.75rem; }
+    .brand-crest { font-size: 1.8rem; filter: drop-shadow(0 0 8px var(--gold)); }
+    .brand-name {
+      font-size: 1.75rem; font-weight: 700;
+      letter-spacing: 0.2em; text-transform: uppercase;
+      text-shadow: 0 0 14px rgba(255,215,0,0.5);
     }
 
-    .header-crest {
-      font-size: 2rem;
-      filter: drop-shadow(0 0 8px var(--gold));
+    .header-right { display: flex; align-items: center; gap: 1.25rem; }
+    .user-info { display: flex; align-items: center; gap: 0.6rem; }
+    #user-avatar {
+      width: 36px; height: 36px; border-radius: 50%;
+      border: 2px solid var(--gold-dim); display: none;
     }
-
-    .header-title {
-      font-size: 2rem;
-      font-weight: 700;
-      letter-spacing: 0.2em;
-      text-transform: uppercase;
-      color: var(--white);
-      text-shadow: 0 0 16px rgba(255,215,0,0.5);
-    }
-
-    .header-right {
-      display: flex;
-      align-items: center;
-      gap: 1.5rem;
-    }
-
-    .user-info {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-    }
-
-    .user-avatar {
-      width: 42px;
-      height: 42px;
-      border-radius: 50%;
-      border: 2px solid var(--gold-dim);
-      object-fit: cover;
-    }
-
-    .user-avatar-placeholder {
-      width: 42px;
-      height: 42px;
-      border-radius: 50%;
+    #avatar-placeholder {
+      width: 36px; height: 36px; border-radius: 50%;
       border: 2px solid var(--gold-dim);
       background: var(--surface2);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 1.2rem;
-      color: var(--gold);
+      display: flex; align-items: center; justify-content: center;
+      color: var(--gold); font-size: 1rem;
     }
-
-    .user-name {
-      font-size: 1rem;
-      color: var(--muted);
-      letter-spacing: 0.05em;
-    }
-
+    #user-name { font-size: 0.9rem; color: var(--muted); }
     .btn-logout {
-      padding: 0.5rem 1.2rem;
-      background: transparent;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      color: var(--muted);
-      font-size: 0.85rem;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      cursor: pointer;
-      text-decoration: none;
+      padding: 0.4rem 1rem; background: transparent;
+      border: 1px solid var(--border); border-radius: 6px;
+      color: var(--muted); font-size: 0.8rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      cursor: pointer; text-decoration: none;
       transition: border-color 0.2s, color 0.2s;
     }
+    .btn-logout:hover { border-color: rgba(255,255,255,0.3); color: var(--white); }
 
-    .btn-logout:hover {
-      border-color: rgba(255,255,255,0.3);
-      color: var(--white);
+    /* ── Module badges ── */
+    .module-strip {
+      position: relative; z-index: 9;
+      display: flex; gap: 0.5rem;
+      padding: 0.6rem 2rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      overflow-x: auto;
     }
-
-    /* ── Main layout ── */
-    main {
-      position: relative;
-      z-index: 1;
-      padding: 3rem 2.5rem;
-      max-width: 1100px;
-      margin: 0 auto;
+    .mod-badge {
+      display: flex; align-items: center; gap: 0.4rem;
+      padding: 0.3rem 0.75rem; border-radius: 999px;
+      font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase;
+      white-space: nowrap; border: 1px solid var(--border);
     }
-
-    /* ── Welcome banner ── */
-    .welcome {
-      margin-bottom: 3rem;
+    .mod-badge.live   { border-color: rgba(0,255,136,0.3); color: var(--green); background: rgba(0,255,136,0.06); }
+    .mod-badge.active { border-color: rgba(0,229,255,0.3); color: var(--cyan);  background: rgba(0,229,255,0.06); }
+    .mod-badge.locked { color: rgba(255,255,255,0.2); }
+    .mod-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: currentColor;
     }
+    .mod-badge.live .mod-dot { animation: pulse 2s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
 
-    .welcome-greeting {
-      font-size: clamp(1.8rem, 4vw, 2.8rem);
-      font-weight: 700;
-      color: var(--white);
-      text-shadow: 0 0 20px rgba(255,215,0,0.4);
-    }
-
-    .welcome-greeting span {
-      color: var(--gold);
-    }
-
-    .welcome-sub {
-      margin-top: 0.5rem;
-      font-size: 1.1rem;
-      color: var(--muted);
-      font-style: italic;
-    }
-
-    /* ── Status pill ── */
-    .status-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.5rem;
-      margin-top: 1rem;
-      padding: 0.4rem 1rem;
-      background: rgba(0,255,136,0.08);
-      border: 1px solid rgba(0,255,136,0.25);
-      border-radius: 999px;
-      font-size: 0.85rem;
-      color: var(--green);
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-    }
-
-    .status-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--green);
-      animation: pulse 2s ease-in-out infinite;
-    }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50%       { opacity: 0.3; }
-    }
-
-    /* ── Module grid ── */
-    .section-label {
-      font-size: 0.8rem;
-      letter-spacing: 0.3em;
-      text-transform: uppercase;
-      color: var(--muted);
-      margin-bottom: 1.5rem;
-    }
-
-    .module-grid {
+    /* ── Layout ── */
+    .layout {
+      position: relative; z-index: 1;
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-      gap: 1.25rem;
+      grid-template-columns: 1fr 340px;
+      height: calc(100vh - 97px);
+      overflow: hidden;
     }
 
-    .module-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 1.75rem 1.5rem;
-      display: flex;
-      flex-direction: column;
-      gap: 0.75rem;
-      transition: border-color 0.2s, box-shadow 0.2s;
-    }
-
-    .module-card:hover {
-      border-color: rgba(255,215,0,0.2);
-      box-shadow: 0 0 24px rgba(255,215,0,0.05);
-    }
-
-    .module-card.active {
-      border-color: rgba(0,229,255,0.3);
-      box-shadow: 0 0 24px rgba(0,229,255,0.06);
-    }
-
-    .module-card.locked {
-      opacity: 0.35;
-      cursor: not-allowed;
-    }
-
-    .module-icon {
-      font-size: 2.2rem;
-      line-height: 1;
-    }
-
-    .module-number {
-      font-size: 0.72rem;
-      letter-spacing: 0.25em;
-      text-transform: uppercase;
-      color: var(--muted);
-    }
-
-    .module-name {
-      font-size: 1.1rem;
-      font-weight: 600;
-      color: var(--white);
-      letter-spacing: 0.04em;
-    }
-
-    .module-desc {
-      font-size: 0.85rem;
-      color: var(--muted);
-      line-height: 1.5;
-      font-style: italic;
-    }
-
-    .module-badge {
-      display: inline-block;
-      margin-top: auto;
-      padding: 0.25rem 0.65rem;
-      border-radius: 999px;
-      font-size: 0.72rem;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-    }
-
-    .badge-live    { background: rgba(0,255,136,0.1); color: var(--green); border: 1px solid rgba(0,255,136,0.25); }
-    .badge-next    { background: rgba(0,229,255,0.08); color: var(--cyan); border: 1px solid rgba(0,229,255,0.25); }
-    .badge-locked  { background: rgba(255,255,255,0.04); color: var(--muted); border: 1px solid var(--border); }
-
-    /* ── Divider ── */
-    .section-divider {
-      margin: 2.5rem 0;
-      height: 1px;
-      background: linear-gradient(90deg, transparent, var(--border), transparent);
-    }
-
-    /* ── Voice control placeholder ── */
+    /* ── Voice panel (left) ── */
     .voice-panel {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 12px;
+      display: flex; flex-direction: column;
       padding: 2rem;
-      text-align: center;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 1rem;
+      gap: 1.5rem;
+      overflow: hidden;
     }
 
-    .voice-label {
-      font-size: 0.8rem;
-      letter-spacing: 0.25em;
-      text-transform: uppercase;
+    /* Status bar */
+    .status-bar {
+      display: flex; align-items: center; gap: 0.75rem;
+      padding: 0.6rem 1.2rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+    .status-indicator {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: rgba(255,255,255,0.2);
+      flex-shrink: 0;
+      transition: background 0.3s, box-shadow 0.3s;
+    }
+    .status-indicator.idle     { background: rgba(255,255,255,0.15); }
+    .status-indicator.listen   { background: var(--cyan);  box-shadow: 0 0 12px var(--cyan);  animation: pulse 1s ease-in-out infinite; }
+    .status-indicator.thinking { background: var(--gold);  box-shadow: 0 0 12px var(--gold);  animation: pulse 0.6s ease-in-out infinite; }
+    .status-indicator.speaking { background: var(--green); box-shadow: 0 0 12px var(--green); animation: pulse 0.8s ease-in-out infinite; }
+    .status-indicator.error    { background: var(--red);   box-shadow: 0 0 12px var(--red); }
+    #status-text {
+      font-size: 0.85rem; letter-spacing: 0.12em; text-transform: uppercase;
       color: var(--muted);
     }
 
-    .voice-note {
-      font-size: 0.95rem;
-      color: rgba(255,255,255,0.35);
-      font-style: italic;
+    /* Transcript */
+    .transcript-wrap {
+      flex: 1; overflow-y: auto;
+      display: flex; flex-direction: column; gap: 1rem;
+      padding-right: 0.25rem;
+    }
+    .transcript-wrap::-webkit-scrollbar { width: 4px; }
+    .transcript-wrap::-webkit-scrollbar-track { background: transparent; }
+    .transcript-wrap::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    .message {
+      display: flex; flex-direction: column; gap: 0.35rem;
+      animation: fadeSlide 0.3s ease forwards;
+    }
+    @keyframes fadeSlide {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .msg-label {
+      font-size: 0.7rem; letter-spacing: 0.2em;
+      text-transform: uppercase; color: var(--muted);
+    }
+    .msg-bubble {
+      padding: 0.9rem 1.1rem;
+      border-radius: 10px;
+      font-size: 1.05rem;
+      line-height: 1.6;
+      max-width: 88%;
+    }
+    .message.user .msg-bubble {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      align-self: flex-end;
+      color: rgba(255,255,255,0.85);
+    }
+    .message.alfred .msg-bubble {
+      background: var(--gold-faint);
+      border: 1px solid rgba(255,215,0,0.12);
+      align-self: flex-start;
+      color: var(--white);
+    }
+    .message.alfred .msg-label { color: var(--gold-dim); }
+
+    /* Thinking dots */
+    .thinking-bubble {
+      display: flex; align-items: center; gap: 5px;
+      padding: 0.9rem 1.2rem;
+      background: var(--gold-faint);
+      border: 1px solid rgba(255,215,0,0.12);
+      border-radius: 10px;
+    }
+    .thinking-bubble span {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--gold-dim);
+      animation: bounce 1.2s ease-in-out infinite;
+    }
+    .thinking-bubble span:nth-child(2) { animation-delay: 0.2s; }
+    .thinking-bubble span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes bounce {
+      0%,60%,100% { transform: translateY(0); opacity: 0.5; }
+      30%          { transform: translateY(-6px); opacity: 1; }
     }
 
-    .voice-coming {
-      padding: 0.4rem 1.2rem;
-      background: rgba(0,229,255,0.06);
-      border: 1px dashed rgba(0,229,255,0.2);
-      border-radius: 999px;
-      font-size: 0.8rem;
-      color: var(--cyan);
-      letter-spacing: 0.15em;
-      text-transform: uppercase;
+    /* Empty state */
+    .empty-state {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 0.75rem; color: rgba(255,255,255,0.2);
+      text-align: center;
     }
+    .empty-crest { font-size: 4rem; filter: drop-shadow(0 0 10px rgba(255,215,0,0.15)); }
+    .empty-text  { font-size: 1rem; font-style: italic; }
+
+    /* ── Mic button row ── */
+    .mic-row {
+      display: flex; flex-direction: column; align-items: center; gap: 1rem;
+    }
+    .mic-hint {
+      font-size: 0.78rem; letter-spacing: 0.15em;
+      text-transform: uppercase; color: rgba(255,255,255,0.25);
+    }
+    #mic-btn {
+      width: 84px; height: 84px; border-radius: 50%;
+      background: var(--surface);
+      border: 2px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      transition: border-color 0.2s, box-shadow 0.2s, transform 0.15s;
+      position: relative;
+    }
+    #mic-btn svg { transition: fill 0.2s; }
+    #mic-btn:hover { border-color: var(--gold-dim); transform: scale(1.04); }
+    #mic-btn:active { transform: scale(0.97); }
+    #mic-btn.active {
+      border-color: var(--cyan);
+      box-shadow: 0 0 0 6px rgba(0,229,255,0.1), 0 0 24px rgba(0,229,255,0.2);
+      animation: mic-ring 1.5s ease-in-out infinite;
+    }
+    #mic-btn.active svg { fill: var(--cyan); }
+    #mic-btn.speaking {
+      border-color: var(--green);
+      box-shadow: 0 0 0 6px rgba(0,255,136,0.1), 0 0 24px rgba(0,255,136,0.2);
+    }
+    @keyframes mic-ring {
+      0%,100% { box-shadow: 0 0 0 6px rgba(0,229,255,0.1), 0 0 24px rgba(0,229,255,0.2); }
+      50%      { box-shadow: 0 0 0 12px rgba(0,229,255,0.05), 0 0 36px rgba(0,229,255,0.3); }
+    }
+    #mic-label {
+      font-size: 0.78rem; letter-spacing: 0.15em;
+      text-transform: uppercase; color: var(--muted);
+      min-height: 1em;
+    }
+
+    /* Live transcript bar */
+    #live-transcript {
+      min-height: 1.4em;
+      font-size: 0.95rem;
+      font-style: italic;
+      color: rgba(0,229,255,0.6);
+      text-align: center;
+      max-width: 500px;
+    }
+
+    /* ── Sidebar (right) ── */
+    .sidebar {
+      border-left: 1px solid var(--border);
+      background: var(--surface);
+      display: flex; flex-direction: column;
+      overflow-y: auto;
+      padding: 1.5rem;
+      gap: 1.5rem;
+    }
+    .sidebar::-webkit-scrollbar { width: 4px; }
+    .sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    .sidebar-section-label {
+      font-size: 0.72rem; letter-spacing: 0.25em;
+      text-transform: uppercase; color: var(--muted);
+      margin-bottom: 0.75rem;
+    }
+
+    /* Suggested commands */
+    .cmd-list { display: flex; flex-direction: column; gap: 0.5rem; }
+    .cmd-chip {
+      padding: 0.7rem 1rem;
+      background: var(--black);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 0.9rem;
+      color: rgba(255,255,255,0.7);
+      cursor: pointer;
+      transition: border-color 0.2s, color 0.2s;
+      text-align: left;
+    }
+    .cmd-chip:hover {
+      border-color: rgba(255,215,0,0.25);
+      color: var(--white);
+    }
+
+    /* Module cards */
+    .mod-card {
+      padding: 1rem;
+      background: var(--black);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      display: flex; gap: 0.75rem; align-items: flex-start;
+    }
+    .mod-card-icon { font-size: 1.5rem; flex-shrink: 0; }
+    .mod-card-body {}
+    .mod-card-name { font-size: 0.9rem; font-weight: 600; color: var(--white); }
+    .mod-card-desc { font-size: 0.78rem; color: var(--muted); margin-top: 0.2rem; line-height: 1.4; font-style: italic; }
+    .mod-card-tag {
+      display: inline-block; margin-top: 0.4rem;
+      padding: 0.15rem 0.5rem; border-radius: 999px; font-size: 0.65rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+    }
+    .tag-live   { background: rgba(0,255,136,0.08); color: var(--green); border: 1px solid rgba(0,255,136,0.2); }
+    .tag-active { background: rgba(0,229,255,0.08); color: var(--cyan);  border: 1px solid rgba(0,229,255,0.2); }
+    .tag-locked { background: rgba(255,255,255,0.04); color: rgba(255,255,255,0.25); border: 1px solid var(--border); }
 
     /* ── Footer ── */
     footer {
-      position: relative;
-      z-index: 1;
-      padding: 1.5rem 2.5rem;
-      border-top: 1px solid var(--border);
-      text-align: center;
-      font-size: 0.78rem;
-      color: rgba(255,255,255,0.15);
-      letter-spacing: 0.15em;
-      text-transform: uppercase;
+      display: none; /* hidden, header serves as branding */
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 700px) {
+      .layout { grid-template-columns: 1fr; }
+      .sidebar { display: none; }
     }
   </style>
 </head>
 <body>
 
-  <!-- ── Header ── -->
-  <header>
-    <div class="header-brand">
-      <span class="header-crest" aria-hidden="true">&#9812;</span>
-      <span class="header-title">Alfred</span>
+<!-- ── Header ── -->
+<header>
+  <div class="brand">
+    <span class="brand-crest" aria-hidden="true">&#9812;</span>
+    <span class="brand-name">Alfred</span>
+  </div>
+  <div class="header-right">
+    <div class="user-info">
+      <div id="avatar-placeholder" aria-hidden="true">&#9812;</div>
+      <img id="user-avatar" src="" alt="Profile" />
+      <span id="user-name">sir Horace</span>
     </div>
-    <div class="header-right">
-      <div class="user-info">
-        <div class="user-avatar-placeholder" id="avatar-placeholder" aria-hidden="true">&#9812;</div>
-        <img id="user-avatar" class="user-avatar" src="" alt="Profile" style="display:none;" />
-        <span class="user-name" id="user-name">Loading...</span>
-      </div>
-      <a href="/auth/logout" class="btn-logout">Sign Out</a>
-    </div>
-  </header>
+    <a href="/auth/logout" class="btn-logout">Sign Out</a>
+  </div>
+</header>
 
-  <!-- ── Main ── -->
-  <main>
+<!-- ── Module strip ── -->
+<div class="module-strip" role="navigation" aria-label="Modules">
+  <div class="mod-badge live"><div class="mod-dot"></div>M1: Infrastructure</div>
+  <div class="mod-badge active"><div class="mod-dot"></div>M2: Brain &amp; Voice</div>
+  <div class="mod-badge locked">M3: Gmail</div>
+  <div class="mod-badge locked">M4: Drive</div>
+  <div class="mod-badge locked">M5: Calendar &amp; YouTube</div>
+</div>
 
-    <!-- Welcome -->
-    <div class="welcome">
-      <h1 class="welcome-greeting">Good <span id="time-of-day">evening</span>, sir Horace.</h1>
-      <p class="welcome-sub">At your service. What shall we attend to today?</p>
-      <div class="status-pill">
-        <div class="status-dot"></div>
-        Systems Online
-      </div>
-    </div>
+<!-- ── Main layout ── -->
+<div class="layout">
 
-    <!-- Modules -->
-    <p class="section-label">Command Modules</p>
-    <div class="module-grid">
+  <!-- ── Voice panel ── -->
+  <section class="voice-panel" aria-label="Alfred Voice Interface">
 
-      <div class="module-card active">
-        <div class="module-icon">&#9816;</div>
-        <div class="module-number">Module 01</div>
-        <div class="module-name">Infrastructure</div>
-        <div class="module-desc">Login, deployment pipeline, and command centre shell.</div>
-        <span class="module-badge badge-live">Live</span>
-      </div>
-
-      <div class="module-card locked">
-        <div class="module-icon">&#129504;</div>
-        <div class="module-number">Module 02</div>
-        <div class="module-name">The Brain</div>
-        <div class="module-desc">Gemini 3 Flash. British butler persona. Voice output.</div>
-        <span class="module-badge badge-next">Next</span>
-      </div>
-
-      <div class="module-card locked">
-        <div class="module-icon">&#128140;</div>
-        <div class="module-number">Module 03</div>
-        <div class="module-name">Gmail</div>
-        <div class="module-desc">Read, delete, and organise your inbox by voice.</div>
-        <span class="module-badge badge-locked">Locked</span>
-      </div>
-
-      <div class="module-card locked">
-        <div class="module-icon">&#128193;</div>
-        <div class="module-number">Module 04</div>
-        <div class="module-name">Google Drive</div>
-        <div class="module-desc">Browse folders and create documents by voice.</div>
-        <span class="module-badge badge-locked">Locked</span>
-      </div>
-
-      <div class="module-card locked">
-        <div class="module-icon">&#128197;</div>
-        <div class="module-number">Module 05</div>
-        <div class="module-name">Calendar &amp; YouTube</div>
-        <div class="module-desc">Daily briefings and background audio playback.</div>
-        <span class="module-badge badge-locked">Locked</span>
-      </div>
-
+    <!-- Status -->
+    <div class="status-bar" role="status" aria-live="polite">
+      <div class="status-indicator idle" id="status-dot"></div>
+      <span id="status-text">Awaiting your command, sir Horace</span>
     </div>
 
-    <div class="section-divider"></div>
-
-    <!-- Voice panel -->
-    <div class="voice-panel">
-      <span class="voice-label">Voice Control</span>
-      <p class="voice-note">"Alfred is listening for your commands, sir Horace."</p>
-      <span class="voice-coming">Activates in Module 02</span>
+    <!-- Transcript -->
+    <div class="transcript-wrap" id="transcript" aria-label="Conversation transcript">
+      <div class="empty-state" id="empty-state">
+        <div class="empty-crest">&#9812;</div>
+        <p class="empty-text">"Press the microphone to summon Alfred, sir Horace."</p>
+      </div>
     </div>
 
-  </main>
+    <!-- Live transcript (interim speech) -->
+    <p id="live-transcript" aria-live="polite"></p>
 
-  <footer>Alfred v1.0 &mdash; Module 1: Infrastructure &amp; UI</footer>
+    <!-- Mic button -->
+    <div class="mic-row">
+      <span class="mic-hint">Tap to speak</span>
+      <button id="mic-btn" aria-label="Start listening" title="Start / Stop">
+        <!-- Microphone icon -->
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="rgba(255,255,255,0.7)" aria-hidden="true">
+          <path d="M12 1a4 4 0 0 1 4 4v6a4 4 0 0 1-8 0V5a4 4 0 0 1 4-4zm0 2a2 2 0 0 0-2 2v6a2 2 0 0 0 4 0V5a2 2 0 0 0-2-2zm7 9a7 7 0 0 1-14 0H3a9 9 0 0 0 8 8.94V23h2v-2.06A9 9 0 0 0 21 12h-2z"/>
+        </svg>
+      </button>
+      <span id="mic-label">Idle</span>
+    </div>
 
-  <script>
-    // ── Time of day greeting ──
-    const hour = new Date().getHours();
-    const tod = hour < 12 ? 'morning' : hour < 18 ? 'afternoon' : 'evening';
-    document.getElementById('time-of-day').textContent = tod;
+  </section>
 
-    // ── Load user info ──
-    fetch('/api/user')
-      .then(r => r.json())
-      .then(user => {
-        document.getElementById('user-name').textContent = user.name || user.email;
-        if (user.picture) {
-          const img = document.getElementById('user-avatar');
-          const placeholder = document.getElementById('avatar-placeholder');
-          img.src = user.picture;
-          img.style.display = 'block';
-          placeholder.style.display = 'none';
-        }
-      })
-      .catch(() => {
-        document.getElementById('user-name').textContent = 'sir Horace';
-      });
-  </script>
+  <!-- ── Sidebar ── -->
+  <aside class="sidebar" aria-label="Suggestions and modules">
 
+    <div>
+      <p class="sidebar-section-label">Try saying</p>
+      <div class="cmd-list" id="cmd-list">
+        <button class="cmd-chip" data-cmd="Good evening Alfred, how are you?">Good evening Alfred, how are you?</button>
+        <button class="cmd-chip" data-cmd="What are your capabilities, Alfred?">What are your capabilities?</button>
+        <button class="cmd-chip" data-cmd="Tell me something about proper British etiquette.">Tell me about British etiquette.</button>
+        <button class="cmd-chip" data-cmd="What modules are coming next?">What modules are coming next?</button>
+        <button class="cmd-chip" data-cmd="Alfred, what time is it?">What time is it?</button>
+      </div>
+    </div>
+
+    <div>
+      <p class="sidebar-section-label">Module Status</p>
+
+      <div style="display:flex;flex-direction:column;gap:0.6rem;">
+        <div class="mod-card">
+          <div class="mod-card-icon">&#9816;</div>
+          <div class="mod-card-body">
+            <div class="mod-card-name">Infrastructure</div>
+            <div class="mod-card-desc">Login &amp; deployment pipeline.</div>
+            <span class="mod-card-tag tag-live">Live</span>
+          </div>
+        </div>
+        <div class="mod-card">
+          <div class="mod-card-icon">&#129504;</div>
+          <div class="mod-card-body">
+            <div class="mod-card-name">Brain &amp; Persona</div>
+            <div class="mod-card-desc">Gemini 2.0 Flash. British butler voice.</div>
+            <span class="mod-card-tag tag-active">Active</span>
+          </div>
+        </div>
+        <div class="mod-card">
+          <div class="mod-card-icon">&#128140;</div>
+          <div class="mod-card-body">
+            <div class="mod-card-name">Gmail</div>
+            <div class="mod-card-desc">Read, manage and reply by voice.</div>
+            <span class="mod-card-tag tag-locked">Next</span>
+          </div>
+        </div>
+        <div class="mod-card">
+          <div class="mod-card-icon">&#128193;</div>
+          <div class="mod-card-body">
+            <div class="mod-card-name">Google Drive</div>
+            <div class="mod-card-desc">Browse folders, create documents.</div>
+            <span class="mod-card-tag tag-locked">Locked</span>
+          </div>
+        </div>
+        <div class="mod-card">
+          <div class="mod-card-icon">&#128197;</div>
+          <div class="mod-card-body">
+            <div class="mod-card-name">Calendar &amp; YouTube</div>
+            <div class="mod-card-desc">Briefings and audio playback.</div>
+            <span class="mod-card-tag tag-locked">Locked</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </aside>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════════════════════════
+//  Alfred — Module 2: Voice Interface
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── DOM refs ──────────────────────────────────────────────────────────────────
+const micBtn        = document.getElementById('mic-btn');
+const micLabel      = document.getElementById('mic-label');
+const statusDot     = document.getElementById('status-dot');
+const statusText    = document.getElementById('status-text');
+const transcript    = document.getElementById('transcript');
+const emptyState    = document.getElementById('empty-state');
+const liveText      = document.getElementById('live-transcript');
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let isListening   = false;
+let recognition   = null;
+let currentAudio  = null;
+
+// ── Status helpers ────────────────────────────────────────────────────────────
+function setStatus(state, text) {
+  statusDot.className = 'status-indicator ' + state;
+  statusText.textContent = text;
+}
+
+function setMicState(state) {
+  micBtn.className = '';
+  if (state === 'listen') {
+    micBtn.classList.add('active');
+    micLabel.textContent = 'Listening…';
+    setStatus('listen', 'Listening, sir Horace…');
+  } else if (state === 'thinking') {
+    micLabel.textContent = 'Thinking…';
+    setStatus('thinking', 'Alfred is composing a reply…');
+  } else if (state === 'speaking') {
+    micBtn.classList.add('speaking');
+    micLabel.textContent = 'Speaking…';
+    setStatus('speaking', 'Alfred is speaking…');
+  } else {
+    micLabel.textContent = 'Idle';
+    setStatus('idle', 'Awaiting your command, sir Horace');
+  }
+}
+
+// ── Transcript helpers ────────────────────────────────────────────────────────
+function removeEmptyState() {
+  if (emptyState) emptyState.remove();
+}
+
+function appendMessage(role, text) {
+  removeEmptyState();
+  const wrap = document.createElement('div');
+  wrap.className = `message ${role}`;
+  const label = role === 'user' ? 'You' : 'Alfred';
+  wrap.innerHTML = `
+    <span class="msg-label">${label}</span>
+    <div class="msg-bubble">${escapeHtml(text)}</div>
+  `;
+  transcript.appendChild(wrap);
+  transcript.scrollTop = transcript.scrollHeight;
+  return wrap;
+}
+
+function showThinking() {
+  removeEmptyState();
+  const el = document.createElement('div');
+  el.id = 'thinking-indicator';
+  el.className = 'message alfred';
+  el.innerHTML = `
+    <span class="msg-label">Alfred</span>
+    <div class="thinking-bubble"><span></span><span></span><span></span></div>
+  `;
+  transcript.appendChild(el);
+  transcript.scrollTop = transcript.scrollHeight;
+}
+
+function hideThinking() {
+  document.getElementById('thinking-indicator')?.remove();
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Audio playback (Gemini TTS with browser fallback) ─────────────────────────
+async function alfredSpeak(text) {
+  setMicState('speaking');
+
+  try {
+    const res = await fetch('/api/alfred/speak', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    });
+    const data = await res.json();
+
+    if (data.audioBase64) {
+      // ── Gemini TTS path ──
+      await playBase64Audio(data.audioBase64, data.mimeType);
+    } else {
+      // ── Browser TTS fallback ──
+      await browserSpeak(data.text || text);
+    }
+  } catch (err) {
+    console.error('[speak]', err);
+    await browserSpeak(text);
+  }
+
+  setMicState('idle');
+}
+
+function playBase64Audio(base64, mimeType) {
+  return new Promise((resolve) => {
+    const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+    const blob  = new Blob([bytes], { type: mimeType || 'audio/wav' });
+    const url   = URL.createObjectURL(blob);
+    currentAudio = new Audio(url);
+    currentAudio.onended  = () => { URL.revokeObjectURL(url); resolve(); };
+    currentAudio.onerror  = () => { URL.revokeObjectURL(url); resolve(); };
+    currentAudio.play().catch(resolve);
+  });
+}
+
+function browserSpeak(text) {
+  return new Promise((resolve) => {
+    if (!window.speechSynthesis) return resolve();
+    window.speechSynthesis.cancel();
+    const utt = new SpeechSynthesisUtterance(text);
+    utt.lang = 'en-GB';
+    utt.rate = 0.92;
+    utt.pitch = 0.85;
+    // Pick best available British English voice
+    const voices = window.speechSynthesis.getVoices();
+    const brit = voices.find(v => v.lang === 'en-GB' && v.name.toLowerCase().includes('male'))
+              || voices.find(v => v.lang === 'en-GB')
+              || voices.find(v => v.lang.startsWith('en'));
+    if (brit) utt.voice = brit;
+    utt.onend = resolve;
+    utt.onerror = resolve;
+    window.speechSynthesis.speak(utt);
+  });
+}
+
+// ── Chat with Alfred ──────────────────────────────────────────────────────────
+async function sendToAlfred(message) {
+  appendMessage('user', message);
+  liveText.textContent = '';
+  setMicState('thinking');
+  showThinking();
+
+  try {
+    const res = await fetch('/api/alfred/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message }),
+    });
+    const data = await res.json();
+    hideThinking();
+
+    const reply = data.reply || "I do beg your pardon, sir Horace. Something appears to have gone awry.";
+    appendMessage('alfred', reply);
+    await alfredSpeak(reply);
+  } catch (err) {
+    hideThinking();
+    const fallback = "I do beg your pardon, sir Horace. I seem to be experiencing a technical difficulty.";
+    appendMessage('alfred', fallback);
+    await alfredSpeak(fallback);
+    setMicState('idle');
+  }
+}
+
+// ── Web Speech API ────────────────────────────────────────────────────────────
+function initRecognition() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    alert("Your browser does not support Web Speech API. Please use Chrome or Edge.");
+    return null;
+  }
+
+  const rec = new SpeechRecognition();
+  rec.lang = 'en-GB';
+  rec.continuous = false;
+  rec.interimResults = true;
+  rec.maxAlternatives = 1;
+
+  rec.onresult = (e) => {
+    let interim = '', final = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const t = e.results[i][0].transcript;
+      if (e.results[i].isFinal) final += t;
+      else interim += t;
+    }
+    liveText.textContent = interim || final;
+    if (final) {
+      stopListening();
+      sendToAlfred(final.trim());
+    }
+  };
+
+  rec.onerror = (e) => {
+    console.error('[recognition]', e.error);
+    stopListening();
+    if (e.error !== 'no-speech') {
+      setStatus('error', 'Microphone error: ' + e.error);
+      setTimeout(() => setMicState('idle'), 2500);
+    } else {
+      setMicState('idle');
+    }
+    liveText.textContent = '';
+  };
+
+  rec.onend = () => {
+    if (isListening) stopListening();
+  };
+
+  return rec;
+}
+
+function startListening() {
+  if (!recognition) recognition = initRecognition();
+  if (!recognition) return;
+  if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+  if (window.speechSynthesis) window.speechSynthesis.cancel();
+  isListening = true;
+  setMicState('listen');
+  liveText.textContent = '';
+  recognition.start();
+}
+
+function stopListening() {
+  isListening = false;
+  recognition?.stop();
+  micBtn.className = '';
+}
+
+// ── Mic button toggle ─────────────────────────────────────────────────────────
+micBtn.addEventListener('click', () => {
+  if (isListening) {
+    stopListening();
+    setMicState('idle');
+  } else {
+    startListening();
+  }
+});
+
+// ── Suggested command chips ───────────────────────────────────────────────────
+document.getElementById('cmd-list').addEventListener('click', (e) => {
+  const chip = e.target.closest('.cmd-chip');
+  if (!chip) return;
+  const cmd = chip.dataset.cmd;
+  if (cmd && !isListening) sendToAlfred(cmd);
+});
+
+// ── Load user info ────────────────────────────────────────────────────────────
+fetch('/api/user')
+  .then(r => r.json())
+  .then(user => {
+    document.getElementById('user-name').textContent = user.name || 'sir Horace';
+    if (user.picture) {
+      const img = document.getElementById('user-avatar');
+      const ph  = document.getElementById('avatar-placeholder');
+      img.src = user.picture;
+      img.style.display = 'block';
+      ph.style.display  = 'none';
+    }
+  })
+  .catch(() => {});
+
+// ── Keyboard shortcut: Space to toggle mic ───────────────────────────────────
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'Space' && e.target === document.body) {
+    e.preventDefault();
+    micBtn.click();
+  }
+});
+</script>
 </body>
 </html>
