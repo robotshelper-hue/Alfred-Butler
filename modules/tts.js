@@ -2,27 +2,37 @@
  * Text-to-Speech via Gemini 2.0 Flash TTS API.
  * Returns base64-encoded PCM audio (audio/wav) or null on failure.
  *
- * Chosen voice: "Charon" — a measured, deep, authoritative voice
- * befitting a British gentleman's butler.
+ * Voice: "Orus" — the firmest, most authoritative male voice available
+ * in Gemini TTS. Deep, measured, and commanding — perfect for a
+ * posh British butler.
  *
- * Strict TEXT-ONLY rule: strip all emojis, asterisks, and markdown
- * characters before synthesis so Alfred never reads them aloud.
+ * Delivery steering: a style instruction is prepended to every TTS
+ * request so Gemini shapes the prosody toward a refined British RP
+ * accent with gravelly authority.
+ *
+ * Strict TEXT-ONLY rule: all emojis, asterisks, and markdown are
+ * stripped before synthesis so Alfred never reads them aloud.
  */
 
 const TTS_MODEL = 'gemini-2.0-flash-preview-tts';
-const VOICE_NAME = 'Charon';  // Deep, measured, authoritative
+const VOICE_NAME = 'Orus'; // Firm, deep, authoritative — closest to British RP male
+
+// Delivery instruction prepended to every TTS request.
+// Gemini TTS uses this to steer prosody and tone.
+const DELIVERY_PREFIX =
+  'Speak in a refined, calm, and sophisticated British Received Pronunciation accent. ' +
+  'Your tone is slightly gravelly, deeply authoritative, and unhurried — ' +
+  'the voice of a dignified, middle-aged British gentleman\'s butler. ' +
+  'Never rush. Pause naturally between clauses.\n\n';
 
 // ── Text sanitiser ────────────────────────────────────────────────────────────
 function sanitise(text) {
   return text
-    // Strip markdown formatting characters
     .replace(/[*_~`#>|]/g, '')
-    // Strip emoji (broad Unicode ranges)
     .replace(/[\u{1F300}-\u{1FAFF}]/gu, '')
     .replace(/[\u{2600}-\u{27BF}]/gu, '')
     .replace(/[\u{2B00}-\u{2BFF}]/gu, '')
     .replace(/[\u{FE00}-\u{FEFF}]/gu, '')
-    // Collapse multiple spaces
     .replace(/\s{2,}/g, ' ')
     .trim();
 }
@@ -40,7 +50,7 @@ async function synthesise(text) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${TTS_MODEL}:generateContent?key=${apiKey}`;
 
   const body = {
-    contents: [{ parts: [{ text: clean }] }],
+    contents: [{ parts: [{ text: DELIVERY_PREFIX + clean }] }],
     generationConfig: {
       responseModalities: ['AUDIO'],
       speechConfig: {
@@ -74,3 +84,4 @@ async function synthesise(text) {
 }
 
 module.exports = { synthesise, sanitise };
+
