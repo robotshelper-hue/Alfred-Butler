@@ -122,6 +122,9 @@ app.post('/api/alfred/chat', requireAuth, async (req, res) => {
     res.json({ reply });
   } catch (err) {
     console.error('[/api/alfred/chat]', err.message);
+    const is429 = err.status === 429 || String(err.message).includes('429')
+                  || String(err.message).toLowerCase().includes('quota');
+    if (is429) return res.status(429).json({ error: 'rate_limited' });
     res.status(500).json({ error: 'Alfred encountered a difficulty, sir Horace.' });
   }
 });

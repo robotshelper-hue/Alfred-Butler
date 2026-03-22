@@ -253,6 +253,11 @@
       border-color: var(--green);
       box-shadow: 0 0 0 6px rgba(0,255,136,0.1), 0 0 24px rgba(0,255,136,0.2);
     }
+    #mic-btn.busy {
+      cursor: not-allowed;
+      opacity: 0.4;
+      transform: none !important;
+    }
     @keyframes mic-ring {
       0%,100% { box-shadow: 0 0 0 6px rgba(0,229,255,0.1), 0 0 24px rgba(0,229,255,0.2); }
       50%      { box-shadow: 0 0 0 12px rgba(0,229,255,0.05), 0 0 36px rgba(0,229,255,0.3); }
@@ -486,6 +491,7 @@ const liveText      = document.getElementById('live-transcript');
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let isListening   = false;
+let isBusy        = false;   // true while Alfred is thinking or speaking
 let recognition   = null;
 let currentAudio  = null;
 
@@ -615,6 +621,11 @@ function browserSpeak(text) {
 
 // ── Chat with Alfred ──────────────────────────────────────────────────────────
 async function sendToAlfred(message) {
+  // Debounce guard — drop the request if Alfred is already processing
+  if (isBusy) return;
+  isBusy = true;
+  micBtn.classList.add('busy');
+
   appendMessage('user', message);
   liveText.textContent = '';
   setMicState('thinking');
@@ -626,9 +637,18 @@ async function sendToAlfred(message) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message }),
     });
-    const data = await res.json();
+
     hideThinking();
 
+    // ── 429 Rate-limit handling ──
+    if (res.status === 429) {
+      const msg = "I do apologize, sir, but we are moving a bit too fast for my current cognitive limits. One moment, please.";
+      appendMessage('alfred', msg);
+      await alfredSpeak(msg);
+      return;
+    }
+
+    const data = await res.json();
     const reply = data.reply || "I do beg your pardon, sir Horace. Something appears to have gone awry.";
     appendMessage('alfred', reply);
     await alfredSpeak(reply);
@@ -637,6 +657,10 @@ async function sendToAlfred(message) {
     const fallback = "I do beg your pardon, sir Horace. I seem to be experiencing a technical difficulty.";
     appendMessage('alfred', fallback);
     await alfredSpeak(fallback);
+  } finally {
+    // Always release the lock so Alfred can be spoken to again
+    isBusy = false;
+    micBtn.classList.remove('busy');
     setMicState('idle');
   }
 }
@@ -707,6 +731,7 @@ function stopListening() {
 
 // ── Mic button toggle ─────────────────────────────────────────────────────────
 micBtn.addEventListener('click', () => {
+  if (isBusy) return;           // Hard block while Alfred is thinking/speaking
   if (isListening) {
     stopListening();
     setMicState('idle');
@@ -720,7 +745,7 @@ document.getElementById('cmd-list').addEventListener('click', (e) => {
   const chip = e.target.closest('.cmd-chip');
   if (!chip) return;
   const cmd = chip.dataset.cmd;
-  if (cmd && !isListening) sendToAlfred(cmd);
+  if (cmd && !isListening && !isBusy) sendToAlfred(cmd);
 });
 
 // ── Load user info ────────────────────────────────────────────────────────────
