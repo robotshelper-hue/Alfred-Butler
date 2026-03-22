@@ -36,7 +36,7 @@ async function synthesise(text) {
       responseModalities: ['AUDIO'],
       speechConfig: {
         voiceConfig: {
-          prebuiltVoiceConfig: { voiceName: 'Charon' },
+          prebuiltVoiceConfig: { voiceName: 'Orion' },
         },
         pitch: -3.0,
         speakingRate: 0.9,
