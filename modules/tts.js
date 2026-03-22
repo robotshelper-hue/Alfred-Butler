@@ -1,31 +1,17 @@
 /**
  * Text-to-Speech via Gemini 2.0 Flash TTS API.
- * Returns base64-encoded PCM audio (audio/wav) or null on failure.
- *
- * Voice: "Orus" — the firmest, most authoritative male voice available
- * in Gemini TTS. Deep, measured, and commanding — perfect for a
- * posh British butler.
- *
- * Delivery steering: a style instruction is prepended to every TTS
- * request so Gemini shapes the prosody toward a refined British RP
- * accent with gravelly authority.
- *
- * Strict TEXT-ONLY rule: all emojis, asterisks, and markdown are
- * stripped before synthesis so Alfred never reads them aloud.
+ * Voice: Charon — hard-coded, deep and deliberate.
+ * pitch: -3.0, speakingRate: 0.9 for older, more measured delivery.
  */
 
 const TTS_MODEL = 'gemini-2.0-flash-preview-tts';
-const VOICE_NAME = 'Orus'; // Firm, deep, authoritative — closest to British RP male
 
-// Delivery instruction prepended to every TTS request.
-// Gemini TTS uses this to steer prosody and tone.
 const DELIVERY_PREFIX =
   'Speak in a refined, calm, and sophisticated British Received Pronunciation accent. ' +
   'Your tone is slightly gravelly, deeply authoritative, and unhurried — ' +
   'the voice of a dignified, middle-aged British gentleman\'s butler. ' +
   'Never rush. Pause naturally between clauses.\n\n';
 
-// ── Text sanitiser ────────────────────────────────────────────────────────────
 function sanitise(text) {
   return text
     .replace(/[*_~`#>|]/g, '')
@@ -37,11 +23,6 @@ function sanitise(text) {
     .trim();
 }
 
-/**
- * Convert text to speech using Gemini TTS.
- * @param {string} text - The text Alfred should speak
- * @returns {Promise<{audioBase64: string, mimeType: string}|null>}
- */
 async function synthesise(text) {
   const clean = sanitise(text);
   if (!clean) return null;
@@ -55,8 +36,10 @@ async function synthesise(text) {
       responseModalities: ['AUDIO'],
       speechConfig: {
         voiceConfig: {
-          prebuiltVoiceConfig: { voiceName: VOICE_NAME },
+          prebuiltVoiceConfig: { voiceName: 'Charon' },
         },
+        pitch: -3.0,
+        speakingRate: 0.9,
       },
     },
   };
@@ -84,4 +67,5 @@ async function synthesise(text) {
 }
 
 module.exports = { synthesise, sanitise };
+
 

@@ -559,7 +559,7 @@ async function alfredSpeak(text) {
   setMicState('speaking');
 
   try {
-    const res = await fetch('/api/alfred/speak', {
+    const res = await fetch('/api/alfred/speak?v=' + Date.now(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text }),
