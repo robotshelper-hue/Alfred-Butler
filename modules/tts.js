@@ -1,7 +1,7 @@
 /**
  * Text-to-Speech via Gemini 2.0 Flash TTS API.
- * Voice: Charon — hard-coded, deep and deliberate.
- * pitch: -3.0, speakingRate: 0.9 for older, more measured delivery.
+ * Voice: Orion. Delivery steered via DELIVERY_PREFIX prompt.
+ * Note: pitch/speakingRate are not valid Gemini TTS API fields (Google Cloud TTS only).
  */
 
 const TTS_MODEL = 'gemini-2.0-flash-preview-tts';
@@ -38,8 +38,6 @@ async function synthesise(text) {
         voiceConfig: {
           prebuiltVoiceConfig: { voiceName: 'Orion' },
         },
-        pitch: -3.0,
-        speakingRate: 0.9,
       },
     },
   };
