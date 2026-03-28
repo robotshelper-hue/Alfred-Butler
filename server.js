@@ -79,7 +79,14 @@ app.get('/auth/google/callback', async (req, res) => {
       picture: userInfo.picture,
     };
 
-    res.redirect('/dashboard');
+    // Use a JS redirect instead of HTTP 302 — more reliable behind Railway's
+    // TLS-terminating proxy where Set-Cookie + Location in the same response
+    // can occasionally be dropped by certain browsers.
+    res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+<script>window.location.replace('/dashboard');</script>
+<noscript><meta http-equiv="refresh" content="0;url=/dashboard"></noscript>
+</head><body style="background:#000;color:#FFD700;font-family:serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;">
+<p>One moment, sir Horace&hellip;</p></body></html>`);
   } catch (err) {
     console.error('OAuth callback error:', err.message);
     res.redirect('/?error=auth_failed');

@@ -30,7 +30,7 @@ let genAI = null;
 function getModel() {
   if (!genAI) genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
   return genAI.getGenerativeModel({
-    model: 'gemini-2.0-flash',
+    model: 'gemini-1.5-flash-8b',   // lightest model — avoids 429 under high demand
     systemInstruction: SYSTEM_PROMPT,
   });
 }
@@ -51,8 +51,12 @@ async function chat(sessionId, userMessage) {
   if (!histories.has(sessionId)) histories.set(sessionId, []);
   const history = histories.get(sessionId);
 
-  const chatSession = model.startChat({ history });
-  const result = await chatSession.sendMessage(userMessage);
+  // startChat with streaming explicitly off — one complete response per call
+  const chatSession = model.startChat({
+    history,
+    generationConfig: { candidateCount: 1 },
+  });
+  const result = await chatSession.sendMessage(userMessage);  // non-streaming
   const reply = result.response.text();
 
   // Store the exchange in history
