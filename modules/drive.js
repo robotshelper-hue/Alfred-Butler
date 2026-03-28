@@ -1,0 +1,169 @@
+/**
+ * Module 4 — Google Drive Integration (The Archive)
+ *
+ * Provides:
+ *   listRecentFiles(tokens)              → 7 most recently modified files
+ *   searchFiles(tokens, query)           → search by name or full-text keywords
+ *   getDocumentContent(tokens, fileId)   → export Google Doc/Sheet/Slide as plain text
+ *   summarizeDocument(tokens, fileId)    → returns raw text for Gemini to summarise
+ *
+ * TEXT-ONLY rule: all content is stripped of markdown/emoji before
+ * being passed to Alfred's voice pipeline.
+ */
+
+const { google } = require('googleapis');
+
+// ── OAuth client ──────────────────────────────────────────────────────────────
+function createAuth(tokens) {
+  const client = new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    process.env.GOOGLE_REDIRECT_URI
+  );
+  client.setCredentials(tokens);
+  return client;
+}
+
+// ── MIME type helpers ─────────────────────────────────────────────────────────
+const GOOGLE_MIME_LABELS = {
+  'application/vnd.google-apps.document':     'Google Doc',
+  'application/vnd.google-apps.spreadsheet':  'Google Sheet',
+  'application/vnd.google-apps.presentation': 'Google Slides',
+  'application/vnd.google-apps.folder':       'Folder',
+  'application/pdf':                          'PDF',
+  'text/plain':                               'Text file',
+};
+
+// Exportable types and their preferred plain-text export MIME
+const EXPORT_MIME = {
+  'application/vnd.google-apps.document':     'text/plain',
+  'application/vnd.google-apps.spreadsheet':  'text/csv',
+  'application/vnd.google-apps.presentation': 'text/plain',
+};
+
+function friendlyType(mimeType) {
+  return GOOGLE_MIME_LABELS[mimeType] || mimeType.split('/').pop();
+}
+
+function sanitise(text) {
+  return (text || '')
+    .replace(/[*_~`#>|]/g, '')
+    .replace(/[\u{1F300}-\u{1FAFF}]/gu, '')
+    .replace(/[\u{2600}-\u{27BF}]/gu, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+function formatDate(isoString) {
+  if (!isoString) return '';
+  return new Date(isoString).toLocaleDateString('en-GB', {
+    day: 'numeric', month: 'short', year: 'numeric',
+  });
+}
+
+// ── Drive API calls ───────────────────────────────────────────────────────────
+
+/**
+ * List 7 most recently modified files (not trashed, owned by user).
+ */
+async function listRecentFiles(tokens, maxResults = 7) {
+  const drive = google.drive({ version: 'v3', auth: createAuth(tokens) });
+
+  const res = await drive.files.list({
+    pageSize: maxResults,
+    orderBy: 'modifiedTime desc',
+    q: "trashed = false and 'me' in owners",
+    fields: 'files(id, name, mimeType, modifiedTime, webViewLink, parents)',
+  });
+
+  return (res.data.files || []).map(f => ({
+    id:           f.id,
+    name:         sanitise(f.name),
+    type:         friendlyType(f.mimeType),
+    mimeType:     f.mimeType,
+    modifiedDate: formatDate(f.modifiedTime),
+    modifiedTime: f.modifiedTime,
+    webViewLink:  f.webViewLink || null,
+  }));
+}
+
+/**
+ * Search Drive by filename or full-text keywords.
+ * Falls back to name-only search if full-text returns nothing.
+ */
+async function searchFiles(tokens, query, maxResults = 7) {
+  const drive = google.drive({ version: 'v3', auth: createAuth(tokens) });
+
+  const safeQuery = query.replace(/'/g, "\\'");
+
+  const res = await drive.files.list({
+    pageSize: maxResults,
+    orderBy: 'modifiedTime desc',
+    q: `(name contains '${safeQuery}' or fullText contains '${safeQuery}') and trashed = false`,
+    fields: 'files(id, name, mimeType, modifiedTime, webViewLink)',
+  });
+
+  const files = res.data.files || [];
+
+  // Fallback: name-only search
+  if (!files.length) {
+    const fallback = await drive.files.list({
+      pageSize: maxResults,
+      q: `name contains '${safeQuery}' and trashed = false`,
+      fields: 'files(id, name, mimeType, modifiedTime, webViewLink)',
+    });
+    return (fallback.data.files || []).map(f => ({
+      id: f.id, name: sanitise(f.name),
+      type: friendlyType(f.mimeType), mimeType: f.mimeType,
+      modifiedDate: formatDate(f.modifiedTime), webViewLink: f.webViewLink || null,
+    }));
+  }
+
+  return files.map(f => ({
+    id: f.id, name: sanitise(f.name),
+    type: friendlyType(f.mimeType), mimeType: f.mimeType,
+    modifiedDate: formatDate(f.modifiedTime), webViewLink: f.webViewLink || null,
+  }));
+}
+
+/**
+ * Export a Google Doc/Sheet/Slide as plain text for summarisation.
+ * Returns { name, content } or null if the file type isn't exportable.
+ */
+async function getDocumentContent(tokens, fileId) {
+  const drive = google.drive({ version: 'v3', auth: createAuth(tokens) });
+
+  // Fetch file metadata first
+  const meta = await drive.files.get({
+    fileId,
+    fields: 'id, name, mimeType',
+  });
+
+  const { name, mimeType } = meta.data;
+  const exportMime = EXPORT_MIME[mimeType];
+
+  if (!exportMime) {
+    return {
+      name: sanitise(name),
+      content: null,
+      unsupported: true,
+      type: friendlyType(mimeType),
+    };
+  }
+
+  const exported = await drive.files.export(
+    { fileId, mimeType: exportMime },
+    { responseType: 'text' }
+  );
+
+  const rawText = typeof exported.data === 'string'
+    ? exported.data
+    : JSON.stringify(exported.data);
+
+  // Trim to 4000 chars to keep Gemini context manageable
+  const content = sanitise(rawText).slice(0, 4000);
+
+  return { name: sanitise(name), content, type: friendlyType(mimeType) };
+}
+
+module.exports = { listRecentFiles, searchFiles, getDocumentContent };

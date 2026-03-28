@@ -340,6 +340,29 @@
       display: none; /* hidden, header serves as branding */
     }
 
+    /* ── Archive (recent files) panel ── */
+    .file-list { display: flex; flex-direction: column; gap: 0.4rem; }
+    .file-item {
+      display: flex; align-items: center; gap: 0.65rem;
+      padding: 0.55rem 0.75rem;
+      background: var(--black);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      text-decoration: none;
+      transition: border-color 0.2s;
+      cursor: pointer;
+    }
+    .file-item:hover { border-color: rgba(255,215,0,0.2); }
+    .file-icon { font-size: 1rem; flex-shrink: 0; }
+    .file-meta { overflow: hidden; }
+    .file-name {
+      font-size: 0.82rem; color: rgba(255,255,255,0.8);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      max-width: 200px;
+    }
+    .file-date { font-size: 0.68rem; color: var(--muted); margin-top: 1px; }
+    .file-loading { font-size: 0.8rem; color: var(--muted); font-style: italic; padding: 0.4rem 0; }
+
     /* ── Responsive ── */
     @media (max-width: 700px) {
       .layout { grid-template-columns: 1fr; }
@@ -369,8 +392,8 @@
 <div class="module-strip" role="navigation" aria-label="Modules">
   <div class="mod-badge live"><div class="mod-dot"></div>M1: Infrastructure</div>
   <div class="mod-badge live"><div class="mod-dot"></div>M2: Brain &amp; Voice</div>
-  <div class="mod-badge active"><div class="mod-dot"></div>M3: Gmail</div>
-  <div class="mod-badge locked">M4: Drive</div>
+  <div class="mod-badge live"><div class="mod-dot"></div>M3: Gmail</div>
+  <div class="mod-badge active"><div class="mod-dot"></div>M4: Drive</div>
   <div class="mod-badge locked">M5: Calendar &amp; YouTube</div>
 </div>
 
@@ -418,10 +441,10 @@
       <p class="sidebar-section-label">Try saying</p>
       <div class="cmd-list" id="cmd-list">
         <button class="cmd-chip" data-cmd="Alfred, do I have any new mail?">Do I have any new mail?</button>
-        <button class="cmd-chip" data-cmd="Alfred, what does the latest email say?">What does the latest email say?</button>
-        <button class="cmd-chip" data-cmd="Draft a reply saying: Thank you for your message, I will respond shortly.">Draft a reply for me.</button>
+        <button class="cmd-chip" data-cmd="Alfred, what have I been working on lately?">What have I been working on?</button>
+        <button class="cmd-chip" data-cmd="Alfred, search my archive for the budget report.">Search archive for budget report.</button>
+        <button class="cmd-chip" data-cmd="Summarise that document for me, Alfred.">Summarise that document.</button>
         <button class="cmd-chip" data-cmd="Send it, Alfred.">Send it, Alfred.</button>
-        <button class="cmd-chip" data-cmd="What are your capabilities, Alfred?">What are your capabilities?</button>
       </div>
     </div>
 
@@ -456,9 +479,9 @@
         <div class="mod-card">
           <div class="mod-card-icon">&#128193;</div>
           <div class="mod-card-body">
-            <div class="mod-card-name">Google Drive</div>
-            <div class="mod-card-desc">Browse folders, create documents.</div>
-            <span class="mod-card-tag tag-locked">Locked</span>
+            <div class="mod-card-name">The Archive</div>
+            <div class="mod-card-desc">Search files, summarise documents, browse recent work.</div>
+            <span class="mod-card-tag tag-active">Active</span>
           </div>
         </div>
         <div class="mod-card">
@@ -469,6 +492,14 @@
             <span class="mod-card-tag tag-locked">Locked</span>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- ── Archive: recent files ── -->
+    <div>
+      <p class="sidebar-section-label">The Archive — Recent Files</p>
+      <div class="file-list" id="file-list">
+        <p class="file-loading">Retrieving files from the Archive&hellip;</p>
       </div>
     </div>
 
@@ -747,6 +778,41 @@ document.getElementById('cmd-list').addEventListener('click', (e) => {
   const cmd = chip.dataset.cmd;
   if (cmd && !isListening && !isBusy) sendToAlfred(cmd);
 });
+
+// ── File type icon map ────────────────────────────────────────────────────────
+const FILE_ICONS = {
+  'Google Doc':    '📄',
+  'Google Sheet':  '📊',
+  'Google Slides': '📋',
+  'Folder':        '📁',
+  'PDF':           '📕',
+  'Text file':     '📝',
+};
+function fileIcon(type) { return FILE_ICONS[type] || '📄'; }
+
+// ── Load Archive (recent files) ───────────────────────────────────────────────
+fetch('/api/drive/recent')
+  .then(r => r.json())
+  .then(({ files }) => {
+    const list = document.getElementById('file-list');
+    if (!files || !files.length) {
+      list.innerHTML = '<p class="file-loading">No recent files found.</p>';
+      return;
+    }
+    list.innerHTML = files.map(f => `
+      <a class="file-item" href="${f.webViewLink || '#'}" target="_blank" rel="noopener"
+         title="${escapeHtml(f.name)}">
+        <span class="file-icon">${fileIcon(f.type)}</span>
+        <span class="file-meta">
+          <span class="file-name">${escapeHtml(f.name)}</span>
+          <span class="file-date">${f.type} &middot; ${f.modifiedDate}</span>
+        </span>
+      </a>`).join('');
+  })
+  .catch(() => {
+    document.getElementById('file-list').innerHTML =
+      '<p class="file-loading">Archive unavailable.</p>';
+  });
 
 // ── Load user info ────────────────────────────────────────────────────────────
 fetch('/api/user')

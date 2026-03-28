@@ -4,7 +4,8 @@ const session = require('express-session');
 const { google } = require('googleapis');
 const path = require('path');
 const brain = require('./modules/brain');
-const tts = require('./modules/tts');
+const tts   = require('./modules/tts');
+const drive = require('./modules/drive');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -45,6 +46,8 @@ const SCOPES = [
   'https://www.googleapis.com/auth/userinfo.email',
   'https://www.googleapis.com/auth/gmail.modify',
   'https://www.googleapis.com/auth/drive',
+  'https://www.googleapis.com/auth/drive.readonly',
+  'https://www.googleapis.com/auth/drive.metadata.readonly',
   'https://www.googleapis.com/auth/calendar',
 ];
 
@@ -110,7 +113,22 @@ app.get('/api/user', requireAuth, (req, res) => {
 });
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'online', name: 'Alfred', module: 3 });
+  res.json({ status: 'online', name: 'Alfred', module: 4 });
+});
+
+/**
+ * GET /api/drive/recent
+ * Returns the 7 most recently modified Drive files for the dashboard panel.
+ */
+app.get('/api/drive/recent', requireAuth, async (req, res) => {
+  if (!req.session.tokens) return res.json({ files: [] });
+  try {
+    const files = await drive.listRecentFiles(req.session.tokens);
+    res.json({ files });
+  } catch (err) {
+    console.error('[/api/drive/recent]', err.message);
+    res.json({ files: [] });
+  }
 });
 
 // ── Alfred: Brain + Voice + Gmail (Modules 2 & 3) ────────────────────────────
