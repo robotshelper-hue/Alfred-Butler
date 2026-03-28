@@ -1,10 +1,17 @@
 /**
- * Text-to-Speech via Gemini 2.0 Flash TTS API.
- * Voice: Orion. Delivery steered via DELIVERY_PREFIX prompt.
- * Note: pitch/speakingRate are not valid Gemini TTS API fields (Google Cloud TTS only).
+ * Text-to-Speech via Gemini 2.0 Flash with AUDIO response modality.
+ *
+ * The dedicated gemini-2.0-flash-preview-tts model was deprecated 2026-03-27.
+ * We now use gemini-2.0-flash (the stable, confirmed-live model) with
+ * responseModalities:['AUDIO'] — same API shape, no separate TTS endpoint needed.
+ *
+ * Voice: Orion — deep, authoritative male voice.
+ * Delivery steered via DELIVERY_PREFIX prompt text.
+ *
+ * TEXT-ONLY rule: all emojis, asterisks, and markdown stripped before synthesis.
  */
 
-const TTS_MODEL = 'gemini-2.0-flash-preview-tts';
+const TTS_MODEL = 'gemini-2.0-flash';
 
 const DELIVERY_PREFIX =
   'Speak in a refined, calm, and sophisticated British Received Pronunciation accent. ' +
@@ -65,5 +72,3 @@ async function synthesise(text) {
 }
 
 module.exports = { synthesise, sanitise };
-
-

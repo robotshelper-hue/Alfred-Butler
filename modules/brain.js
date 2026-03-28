@@ -30,7 +30,7 @@ let genAI = null;
 function getModel() {
   if (!genAI) genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
   return genAI.getGenerativeModel({
-    model: 'gemini-1.5-flash',   // stable, lightweight, not deprecated
+    model: 'gemini-2.0-flash',   // confirmed working on v1beta; 1.5-flash variants 404
     systemInstruction: SYSTEM_PROMPT,
   });
 }
