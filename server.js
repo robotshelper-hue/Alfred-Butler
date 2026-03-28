@@ -110,23 +110,39 @@ app.get('/api/user', requireAuth, (req, res) => {
 });
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'online', name: 'Alfred', module: 2 });
+  res.json({ status: 'online', name: 'Alfred', module: 3 });
 });
 
-// ── Alfred: Brain + Voice (Module 2) ─────────────────────────────────────────
+// ── Alfred: Brain + Voice + Gmail (Modules 2 & 3) ────────────────────────────
 
 /**
  * POST /api/alfred/chat
  * Body: { message: string }
- * Returns: { reply: string }
+ * Returns: { reply: string, hasPendingDraft: boolean }
+ *
+ * Passes Google OAuth tokens and any staged draft into the brain so
+ * Gemini function calling can access Gmail on sir Horace's behalf.
  */
 app.post('/api/alfred/chat', requireAuth, async (req, res) => {
   const { message } = req.body;
   if (!message?.trim()) return res.status(400).json({ error: 'No message provided' });
 
   try {
-    const reply = await brain.chat(req.session.user.id, message.trim());
-    res.json({ reply });
+    const context = {
+      tokens:       req.session.tokens       || null,
+      pendingDraft: req.session.pendingDraft || null,
+    };
+
+    const { reply, pendingDraft } = await brain.chat(
+      req.session.user.id,
+      message.trim(),
+      context
+    );
+
+    // Persist updated draft state in session
+    req.session.pendingDraft = pendingDraft || null;
+
+    res.json({ reply, hasPendingDraft: !!pendingDraft });
   } catch (err) {
     console.error('[/api/alfred/chat]', err.message);
     const is429 = err.status === 429 || String(err.message).includes('429')
