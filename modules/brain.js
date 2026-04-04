@@ -30,8 +30,14 @@ Grounding rule:
 Capabilities:
 - Module 2: conversation.
 - Module 3 (active): Gmail — list unread, read, draft and send replies with confirmation.
-- Module 4 (active): Google Drive — search files, summarise documents, list recent work.
-- Module 5: Calendar and YouTube — coming soon.`;
+- Module 4 (active): Google Drive — search files, summarise documents, list recent work, create documents, move files, share documents, delete files with double confirmation.
+- Module 5: Calendar and YouTube — coming soon.
+
+Archive rules — you never break these:
+- When creating a document, always confirm the title before calling create_formatted_doc, then announce the resulting link after creation.
+- When moving a file to a folder, confirm the action verbally before executing.
+- When asked to delete or dispose of any file, FIRST call stage_delete_item to locate it, then read back its name and type and ask: "Are you quite sure you wish to dispose of this record, sir?" — only call confirm_delete_item if sir Horace explicitly confirms a second time.
+- When sharing a document, confirm the recipient and role before calling share_document.`;
 
 // ── Tool declarations (Gmail + Drive) ────────────────────────────────────────
 const ALL_TOOLS = [{
@@ -105,6 +111,67 @@ const ALL_TOOLS = [{
       name: 'list_recent_files',
       description: "List the 7 most recently modified files in sir Horace's Google Drive. Use when he asks what he has been working on, or wants to see his recent documents.",
       parameters: { type: 'OBJECT', properties: {} },
+    },
+
+    // ── Advanced Drive ─────────────────────────────────────────────────────
+    {
+      name: 'create_formatted_doc',
+      description: "Create a new Google Doc with a title and optional body text in sir Horace's Drive. Returns the document link.",
+      parameters: {
+        type: 'OBJECT',
+        properties: {
+          title: { type: 'STRING', description: 'Title of the new document.' },
+          body:  { type: 'STRING', description: 'Initial body text to insert into the document. Optional.' },
+        },
+        required: ['title'],
+      },
+    },
+    {
+      name: 'move_to_folder',
+      description: "Move a Drive file into a named folder. Creates the folder if it does not exist. Use when sir Horace asks to organise or file a document.",
+      parameters: {
+        type: 'OBJECT',
+        properties: {
+          file_id:     { type: 'STRING', description: 'Google Drive file ID to move.' },
+          folder_name: { type: 'STRING', description: 'Name of the destination folder.' },
+        },
+        required: ['file_id', 'folder_name'],
+      },
+    },
+    {
+      name: 'stage_delete_item',
+      description: "Search for a file by name and stage it for deletion. Does NOT trash — presents details to sir Horace for a second verbal confirmation.",
+      parameters: {
+        type: 'OBJECT',
+        properties: {
+          name: { type: 'STRING', description: 'Name or partial name of the file to delete.' },
+        },
+        required: ['name'],
+      },
+    },
+    {
+      name: 'confirm_delete_item',
+      description: "Permanently move the previously staged file to the trash. ONLY call after sir Horace has explicitly confirmed deletion a second time.",
+      parameters: {
+        type: 'OBJECT',
+        properties: {
+          file_id: { type: 'STRING', description: 'Google Drive file ID of the item to trash.' },
+        },
+        required: ['file_id'],
+      },
+    },
+    {
+      name: 'share_document',
+      description: "Share a Drive file with another person by email address. Roles: reader, commenter, writer.",
+      parameters: {
+        type: 'OBJECT',
+        properties: {
+          file_id: { type: 'STRING', description: 'Google Drive file ID to share.' },
+          email:   { type: 'STRING', description: 'Email address of the recipient.' },
+          role:    { type: 'STRING', description: 'Permission level: reader, commenter, or writer.' },
+        },
+        required: ['file_id', 'email', 'role'],
+      },
     },
   ],
 }];
@@ -183,6 +250,44 @@ async function executeTool(name, args, context) {
       return { name: doc.name, type: doc.type, content: doc.content };
     }
 
+    // ── Advanced Drive tools ─────────────────────────────────────────────────
+    if (name === 'create_formatted_doc') {
+      const result = await drive.createFormattedDoc(tokens, args.title, args.body || '');
+      if (result.webViewLink) {
+        context.newDocLinks = context.newDocLinks || [];
+        context.newDocLinks.push({ name: result.name, url: result.webViewLink });
+      }
+      return result;
+    }
+
+    if (name === 'move_to_folder') {
+      return await drive.moveToFolder(tokens, args.file_id, args.folder_name);
+    }
+
+    if (name === 'stage_delete_item') {
+      const staged = await drive.stageDeleteItem(tokens, args.name);
+      if (!staged) return { error: `No file matching "${args.name}" was found in the Archive.` };
+      context.newPendingDelete = staged;
+      return { staged_for_deletion: true, file: staged };
+    }
+
+    if (name === 'confirm_delete_item') {
+      const fileId = args.file_id || context.pendingDelete?.fileId;
+      if (!fileId) return { error: 'No file staged for deletion. Please search for it first.' };
+      const result = await drive.confirmDeleteItem(tokens, fileId);
+      context.newPendingDelete = null;
+      return result;
+    }
+
+    if (name === 'share_document') {
+      const result = await drive.shareDocument(tokens, args.file_id, args.email, args.role);
+      if (result.webViewLink) {
+        context.newDocLinks = context.newDocLinks || [];
+        context.newDocLinks.push({ name: result.name, url: result.webViewLink });
+      }
+      return result;
+    }
+
     return { error: `Unknown function: ${name}` };
 
   } catch (err) {
@@ -220,7 +325,9 @@ async function chat(sessionId, userMessage, context = {}) {
   if (!histories.has(sessionId)) histories.set(sessionId, []);
   const history = histories.get(sessionId);
 
-  context.newPendingDraft = context.pendingDraft ?? null;
+  context.newPendingDraft  = context.pendingDraft  ?? null;
+  context.newPendingDelete = context.pendingDelete ?? null;
+  context.newDocLinks      = [];
 
   const chatSession = model.startChat({
     history,
@@ -252,7 +359,12 @@ async function chat(sessionId, userMessage, context = {}) {
   history.push({ role: 'model', parts: [{ text: reply }] });
   if (history.length > 40) history.splice(0, 2);
 
-  return { reply, pendingDraft: context.newPendingDraft };
+  return {
+    reply,
+    pendingDraft:  context.newPendingDraft,
+    pendingDelete: context.newPendingDelete,
+    docLinks:      context.newDocLinks,
+  };
 }
 
 function clearHistory(sessionId) {

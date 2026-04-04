@@ -46,8 +46,10 @@ const SCOPES = [
   'https://www.googleapis.com/auth/userinfo.email',
   'https://www.googleapis.com/auth/gmail.modify',
   'https://www.googleapis.com/auth/drive',
+  'https://www.googleapis.com/auth/drive.file',
   'https://www.googleapis.com/auth/drive.readonly',
   'https://www.googleapis.com/auth/drive.metadata.readonly',
+  'https://www.googleapis.com/auth/documents',
   'https://www.googleapis.com/auth/calendar',
 ];
 
@@ -147,20 +149,27 @@ app.post('/api/alfred/chat', requireAuth, async (req, res) => {
 
   try {
     const context = {
-      tokens:       req.session.tokens       || null,
-      pendingDraft: req.session.pendingDraft || null,
+      tokens:        req.session.tokens        || null,
+      pendingDraft:  req.session.pendingDraft  || null,
+      pendingDelete: req.session.pendingDelete || null,
     };
 
-    const { reply, pendingDraft } = await brain.chat(
+    const { reply, pendingDraft, pendingDelete, docLinks } = await brain.chat(
       req.session.user.id,
       message.trim(),
       context
     );
 
-    // Persist updated draft state in session
-    req.session.pendingDraft = pendingDraft || null;
+    // Persist updated state in session
+    req.session.pendingDraft  = pendingDraft  || null;
+    req.session.pendingDelete = pendingDelete || null;
 
-    res.json({ reply, hasPendingDraft: !!pendingDraft });
+    res.json({
+      reply,
+      hasPendingDraft:  !!pendingDraft,
+      hasPendingDelete: !!pendingDelete,
+      docLinks:         docLinks || [],
+    });
   } catch (err) {
     console.error('[/api/alfred/chat]', err.message);
     const is429 = err.status === 429 || String(err.message).includes('429')

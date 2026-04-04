@@ -193,6 +193,30 @@
     }
     .message.alfred .msg-label { color: var(--gold-dim); }
 
+    /* Doc link chips */
+    .doc-links-row {
+      display: flex; flex-wrap: wrap; gap: 0.5rem;
+      padding: 0.3rem 0 0.6rem 0;
+    }
+    .doc-link-chip {
+      display: inline-block;
+      padding: 0.45rem 0.85rem;
+      background: rgba(255,215,0,0.07);
+      border: 1px solid rgba(255,215,0,0.25);
+      border-radius: 20px;
+      color: var(--gold);
+      font-size: 0.78rem;
+      font-family: inherit;
+      text-decoration: none;
+      letter-spacing: 0.03em;
+      transition: background 0.2s, border-color 0.2s;
+    }
+    .doc-link-chip:hover {
+      background: rgba(255,215,0,0.14);
+      border-color: rgba(255,215,0,0.5);
+    }
+    .doc-link-chip::before { content: '↗ '; opacity: 0.7; }
+
     /* Thinking dots */
     .thinking-bubble {
       display: flex; align-items: center; gap: 5px;
@@ -591,6 +615,23 @@ function escapeHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
+/** Render a row of clickable document links after an Alfred message */
+function appendDocLinks(links) {
+  const row = document.createElement('div');
+  row.className = 'doc-links-row';
+  links.forEach(link => {
+    const a = document.createElement('a');
+    a.href = link.url;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.className = 'doc-link-chip';
+    a.textContent = link.name;
+    row.appendChild(a);
+  });
+  transcript.appendChild(row);
+  transcript.scrollTop = transcript.scrollHeight;
+}
+
 // ── Audio playback (Gemini TTS with browser fallback) ─────────────────────────
 async function alfredSpeak(text) {
   setMicState('speaking');
@@ -682,6 +723,12 @@ async function sendToAlfred(message) {
     const data = await res.json();
     const reply = data.reply || "I do beg your pardon, sir Horace. Something appears to have gone awry.";
     appendMessage('alfred', reply);
+
+    // ── Render clickable document links if returned ──
+    if (data.docLinks && data.docLinks.length > 0) {
+      appendDocLinks(data.docLinks);
+    }
+
     await alfredSpeak(reply);
   } catch (err) {
     hideThinking();

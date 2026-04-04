@@ -166,4 +166,191 @@ async function getDocumentContent(tokens, fileId) {
   return { name: sanitise(name), content, type: friendlyType(mimeType) };
 }
 
-module.exports = { listRecentFiles, searchFiles, getDocumentContent };
+/**
+ * Create a new Google Doc with a title and plain-text body.
+ * Returns { documentId, name, webViewLink }
+ */
+async function createFormattedDoc(tokens, title, body) {
+  const auth  = createAuth(tokens);
+  const docs  = google.docs({ version: 'v1', auth });
+  const drive = google.drive({ version: 'v3', auth });
+
+  // Create the document
+  const created = await docs.documents.create({
+    requestBody: { title: sanitise(title) },
+  });
+
+  const documentId = created.data.documentId;
+
+  // Insert body text if provided
+  if (body && body.trim()) {
+    await docs.documents.batchUpdate({
+      documentId,
+      requestBody: {
+        requests: [{
+          insertText: {
+            location: { index: 1 },
+            text: body.trim(),
+          },
+        }],
+      },
+    });
+  }
+
+  // Fetch the webViewLink from Drive
+  const meta = await drive.files.get({
+    fileId: documentId,
+    fields: 'id, name, webViewLink',
+  });
+
+  return {
+    documentId,
+    name:        sanitise(meta.data.name),
+    webViewLink: meta.data.webViewLink || null,
+  };
+}
+
+/**
+ * Move a file into a folder (search for existing folder, or create it).
+ * Returns { moved: true, fileName, folderName }
+ */
+async function moveToFolder(tokens, fileId, folderName) {
+  const auth  = createAuth(tokens);
+  const drive = google.drive({ version: 'v3', auth });
+
+  const safeName = folderName.replace(/'/g, "\\'");
+
+  // Find or create the target folder
+  let folderId;
+  const folderSearch = await drive.files.list({
+    q: `mimeType='application/vnd.google-apps.folder' and name='${safeName}' and trashed=false`,
+    fields: 'files(id, name)',
+    pageSize: 1,
+  });
+
+  if (folderSearch.data.files?.length) {
+    folderId = folderSearch.data.files[0].id;
+  } else {
+    const newFolder = await drive.files.create({
+      requestBody: {
+        name: folderName,
+        mimeType: 'application/vnd.google-apps.folder',
+      },
+      fields: 'id',
+    });
+    folderId = newFolder.data.id;
+  }
+
+  // Get current parents
+  const fileMeta = await drive.files.get({
+    fileId,
+    fields: 'id, name, parents',
+  });
+
+  const currentParents = (fileMeta.data.parents || []).join(',');
+
+  // Move file: add new parent, remove old parents
+  await drive.files.update({
+    fileId,
+    addParents:    folderId,
+    removeParents: currentParents,
+    fields: 'id, parents',
+  });
+
+  return {
+    moved:      true,
+    fileName:   sanitise(fileMeta.data.name),
+    folderName: sanitise(folderName),
+    folderId,
+  };
+}
+
+/**
+ * Stage a file for deletion — search by name and return metadata.
+ * Does NOT trash anything. Returns the staged item metadata.
+ */
+async function stageDeleteItem(tokens, name) {
+  const drive  = google.drive({ version: 'v3', auth: createAuth(tokens) });
+  const safe   = name.replace(/'/g, "\\'");
+
+  const res = await drive.files.list({
+    q: `name contains '${safe}' and trashed=false`,
+    pageSize: 1,
+    fields: 'files(id, name, mimeType, modifiedTime)',
+    orderBy: 'modifiedTime desc',
+  });
+
+  const files = res.data.files || [];
+  if (!files.length) return null;
+
+  const f = files[0];
+  return {
+    fileId:      f.id,
+    name:        sanitise(f.name),
+    type:        friendlyType(f.mimeType),
+    modifiedDate: formatDate(f.modifiedTime),
+  };
+}
+
+/**
+ * Actually move a file to trash after double confirmation.
+ * Returns { trashed: true, name }
+ */
+async function confirmDeleteItem(tokens, fileId) {
+  const drive = google.drive({ version: 'v3', auth: createAuth(tokens) });
+
+  const meta = await drive.files.get({ fileId, fields: 'id, name' });
+
+  await drive.files.update({
+    fileId,
+    requestBody: { trashed: true },
+  });
+
+  return { trashed: true, name: sanitise(meta.data.name) };
+}
+
+/**
+ * Share a Drive file with a given email address and role.
+ * role: 'reader' | 'commenter' | 'writer'
+ * Returns { shared: true, name, email, role, webViewLink }
+ */
+async function shareDocument(tokens, fileId, email, role) {
+  const auth  = createAuth(tokens);
+  const drive = google.drive({ version: 'v3', auth });
+
+  const validRole = ['reader', 'commenter', 'writer'].includes(role) ? role : 'reader';
+
+  await drive.permissions.create({
+    fileId,
+    requestBody: {
+      type:         'user',
+      role:         validRole,
+      emailAddress: email,
+    },
+    sendNotificationEmail: false,
+  });
+
+  const meta = await drive.files.get({
+    fileId,
+    fields: 'id, name, webViewLink',
+  });
+
+  return {
+    shared:      true,
+    name:        sanitise(meta.data.name),
+    email,
+    role:        validRole,
+    webViewLink: meta.data.webViewLink || null,
+  };
+}
+
+module.exports = {
+  listRecentFiles,
+  searchFiles,
+  getDocumentContent,
+  createFormattedDoc,
+  moveToFolder,
+  stageDeleteItem,
+  confirmDeleteItem,
+  shareDocument,
+};
