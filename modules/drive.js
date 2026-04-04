@@ -224,34 +224,61 @@ async function listFolderContents(tokens, folderName) {
 }
 
 /**
+ * Extract a human-readable reason from a googleapis error response.
+ */
+function extractApiError(err) {
+  const apiErr = err?.response?.data?.error || {};
+  const reason = apiErr?.errors?.[0]?.reason || '';
+  const msg    = apiErr?.message || err.message || 'Unknown error';
+  const code   = apiErr?.code   || err.code   || err.status || 0;
+  return { code, reason, msg };
+}
+
+/**
  * Create a new Google Doc with a title and plain-text body.
- * Returns { documentId, name, webViewLink }
+ * Returns { documentId, name, webViewLink } or throws with enriched error.
  */
 async function createFormattedDoc(tokens, title, body) {
   const auth  = createAuth(tokens);
   const docs  = google.docs({ version: 'v1', auth });
   const drive = google.drive({ version: 'v3', auth });
 
-  // Create the document
-  const created = await docs.documents.create({
-    requestBody: { title: sanitise(title) },
-  });
+  // Create the document — surface specific error if Docs API is not enabled
+  let created;
+  try {
+    created = await docs.documents.create({
+      requestBody: { title: sanitise(title) },
+    });
+  } catch (err) {
+    const { code, reason, msg } = extractApiError(err);
+    console.error(`[createFormattedDoc] HTTP ${code} reason="${reason}":`, msg);
+    // Re-throw with enriched structure so executeTool can classify it
+    const enriched = new Error(msg);
+    enriched.code     = code;
+    enriched.response = err.response;
+    throw enriched;
+  }
 
   const documentId = created.data.documentId;
 
   // Insert body text if provided
   if (body && body.trim()) {
-    await docs.documents.batchUpdate({
-      documentId,
-      requestBody: {
-        requests: [{
-          insertText: {
-            location: { index: 1 },
-            text: body.trim(),
-          },
-        }],
-      },
-    });
+    try {
+      await docs.documents.batchUpdate({
+        documentId,
+        requestBody: {
+          requests: [{
+            insertText: {
+              location: { index: 1 },
+              text: body.trim(),
+            },
+          }],
+        },
+      });
+    } catch (err) {
+      // Body insert failed — document was created; return what we have
+      console.error('[createFormattedDoc] batchUpdate failed:', err.message);
+    }
   }
 
   // Fetch the webViewLink from Drive

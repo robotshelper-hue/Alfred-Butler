@@ -103,6 +103,17 @@ app.get('/auth/logout', (req, res) => {
   req.session.destroy(() => res.redirect('/'));
 });
 
+// Force re-consent — clears session tokens so the next /auth/google will
+// present the full scope-grant checkboxes again.
+app.get('/auth/reauth', (req, res) => {
+  if (req.session) {
+    req.session.tokens = null;
+    req.session.pendingDraft  = null;
+    req.session.pendingDelete = null;
+  }
+  res.redirect('/auth/google');
+});
+
 // ── Auth guard ────────────────────────────────────────────────────────────────
 function requireAuth(req, res, next) {
   if (!req.session?.user) return res.redirect('/');

@@ -43,7 +43,13 @@ Archive rules — you never break these:
 - When sharing a document, confirm the recipient and role before calling share_document.
 
 Stop behaviour — you never break this:
-- If sir Horace says "Stop", "Silence", or "That is all", cease immediately. Do not apologise. Do not say goodbye. Do not explain. Silence is the correct and only response.`;
+- If sir Horace says "Stop", "Silence", or "That is all", cease immediately. Do not apologise. Do not say goodbye. Do not explain. Silence is the correct and only response.
+
+Error responses — translate tool errors into plain English, never use technical jargon:
+- error "api_not_enabled": Say "Sir Horace, the [api] has not been activated in the Google Cloud Console. It must be enabled there before I can assist with that."
+- error "scope_refresh_needed": Say "Sir Horace, my credentials for that action require renewal. Please visit /auth/google to sign in again — it will prompt you to grant the necessary permissions."
+- error "not_authorized": Say "I am afraid I do not have the necessary permissions for that, sir Horace. Signing in again at /auth/google should resolve it."
+- Any other error: State the nature of the problem in plain, calm English. Never say the words error, exception, or API.`;
 
 // ── Tool declarations (Gmail + Drive) ────────────────────────────────────────
 const ALL_TOOLS = [{
@@ -328,11 +334,35 @@ async function executeTool(name, args, context) {
     return { error: `Unknown function: ${name}` };
 
   } catch (err) {
-    if (err.code === 403 || String(err.message).includes('insufficient')) {
-      return { error: 'not_authorized' };
+    // ── Parse the googleapis structured error body ──────────────────────────
+    const apiErr  = err?.response?.data?.error || {};
+    const reason  = apiErr?.errors?.[0]?.reason || '';
+    const detail  = apiErr?.message || err.message || 'Unknown error';
+    const status  = apiErr?.code   || err.code   || err.status || 0;
+
+    console.error(`[tool:${name}] HTTP ${status} reason="${reason}":`, detail);
+
+    if (status === 403 || status === 401) {
+      if (reason === 'accessNotConfigured') {
+        // The API (Docs, Drive, etc.) is not enabled in Google Cloud Console
+        const apiName = detail.match(/([A-Za-z ]+ API)/)?.[1] || 'A required Google API';
+        return {
+          error: 'api_not_enabled',
+          api:    apiName,
+          detail: `${apiName} must be enabled in the Google Cloud Console before Alfred can use it.`,
+        };
+      }
+      if (reason === 'insufficientPermissions' || detail.toLowerCase().includes('insufficient')) {
+        return {
+          error:  'scope_refresh_needed',
+          detail: 'The current session does not hold the required permission scope. Re-authentication is needed.',
+        };
+      }
+      // Generic 403/401
+      return { error: 'not_authorized', detail };
     }
-    console.error(`[tool:${name}]`, err.message);
-    return { error: err.message };
+
+    return { error: detail };
   }
 }
 
