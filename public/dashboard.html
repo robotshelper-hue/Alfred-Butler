@@ -144,6 +144,7 @@
     .status-indicator.listen   { background: var(--cyan);  box-shadow: 0 0 12px var(--cyan);  animation: pulse 1s ease-in-out infinite; }
     .status-indicator.thinking { background: var(--gold);  box-shadow: 0 0 12px var(--gold);  animation: pulse 0.6s ease-in-out infinite; }
     .status-indicator.speaking { background: var(--green); box-shadow: 0 0 12px var(--green); animation: pulse 0.8s ease-in-out infinite; }
+    .status-indicator.ready    { background: var(--gold);  box-shadow: 0 0 8px var(--gold);   animation: pulse 1.4s ease-in-out infinite; }
     .status-indicator.error    { background: var(--red);   box-shadow: 0 0 12px var(--red); }
     #status-text {
       font-size: 0.85rem; letter-spacing: 0.12em; text-transform: uppercase;
@@ -569,6 +570,9 @@ function setMicState(state) {
     micBtn.classList.add('speaking');
     micLabel.textContent = 'Speaking…';
     setStatus('speaking', 'Alfred is speaking…');
+  } else if (state === 'ready') {
+    micLabel.textContent = 'At your service';
+    setStatus('ready', 'At your service, sir Horace.');
   } else {
     micLabel.textContent = 'Idle';
     setStatus('idle', 'Awaiting your command, sir Horace');
@@ -632,9 +636,77 @@ function appendDocLinks(links) {
   transcript.scrollTop = transcript.scrollHeight;
 }
 
+// ── Verbal stop (interrupt) listener ─────────────────────────────────────────
+let interruptRec = null;
+
+const STOP_PHRASES = ['stop', 'silence', 'that is all', 'that\'s all'];
+
+function startInterruptListener() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) return;
+
+  try {
+    interruptRec = new SpeechRecognition();
+    interruptRec.lang = 'en-GB';
+    interruptRec.continuous = true;
+    interruptRec.interimResults = true;
+    interruptRec.maxAlternatives = 1;
+
+    interruptRec.onresult = (e) => {
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const spoken = e.results[i][0].transcript.toLowerCase().trim();
+        if (STOP_PHRASES.some(p => spoken === p || spoken.endsWith(' ' + p))) {
+          emergencyStop();
+          return;
+        }
+      }
+    };
+
+    interruptRec.onerror = () => { /* silent — this is a background listener */ };
+    interruptRec.onend   = () => { /* do not restart — managed by alfredSpeak */ };
+
+    interruptRec.start();
+  } catch (err) {
+    console.warn('[interruptRec] Could not start:', err);
+  }
+}
+
+function stopInterruptListener() {
+  if (interruptRec) {
+    try { interruptRec.stop(); } catch (_) {}
+    interruptRec = null;
+  }
+}
+
+/** Hard-stop all audio immediately, release lock, show ready pulse. */
+function emergencyStop() {
+  stopInterruptListener();
+
+  // Kill Gemini audio
+  if (currentAudio) {
+    currentAudio.pause();
+    currentAudio.src = '';
+    currentAudio = null;
+  }
+
+  // Kill browser TTS
+  if (window.speechSynthesis) window.speechSynthesis.cancel();
+
+  // Release the processing lock so Alfred can receive the next command
+  isBusy = false;
+  micBtn.classList.remove('busy');
+
+  // Brief "at your service" pulse, then return to idle
+  setMicState('ready');
+  setTimeout(() => {
+    if (!isListening && !isBusy) setMicState('idle');
+  }, 1500);
+}
+
 // ── Audio playback (Gemini TTS with browser fallback) ─────────────────────────
 async function alfredSpeak(text) {
   setMicState('speaking');
+  startInterruptListener();
 
   try {
     const res = await fetch('/api/alfred/speak?v=' + Date.now(), {
@@ -654,6 +726,8 @@ async function alfredSpeak(text) {
   } catch (err) {
     console.error('[speak]', err);
     await browserSpeak(text);
+  } finally {
+    stopInterruptListener();
   }
 
   setMicState('idle');
@@ -665,8 +739,8 @@ function playBase64Audio(base64, mimeType) {
     const blob  = new Blob([bytes], { type: mimeType || 'audio/wav' });
     const url   = URL.createObjectURL(blob);
     currentAudio = new Audio(url);
-    currentAudio.onended  = () => { URL.revokeObjectURL(url); resolve(); };
-    currentAudio.onerror  = () => { URL.revokeObjectURL(url); resolve(); };
+    currentAudio.onended  = () => { URL.revokeObjectURL(url); currentAudio = null; resolve(); };
+    currentAudio.onerror  = () => { URL.revokeObjectURL(url); currentAudio = null; resolve(); };
     currentAudio.play().catch(resolve);
   });
 }

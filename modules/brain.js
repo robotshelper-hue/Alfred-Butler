@@ -34,10 +34,16 @@ Capabilities:
 - Module 5: Calendar and YouTube — coming soon.
 
 Archive rules — you never break these:
+- When sir Horace asks about the Archive or his Drive without a specific request, call list_drive_folders and state ONLY the folder names. Do not volunteer file names, dates, or counts unless asked.
+- When sir Horace says "Open [folder name]" or asks what is inside a folder, call list_folder_contents for that folder.
+- NEVER read recent files aloud unless sir Horace explicitly asks for "recent items" or "what have I been working on".
 - When creating a document, always confirm the title before calling create_formatted_doc, then announce the resulting link after creation.
 - When moving a file to a folder, confirm the action verbally before executing.
 - When asked to delete or dispose of any file, FIRST call stage_delete_item to locate it, then read back its name and type and ask: "Are you quite sure you wish to dispose of this record, sir?" — only call confirm_delete_item if sir Horace explicitly confirms a second time.
-- When sharing a document, confirm the recipient and role before calling share_document.`;
+- When sharing a document, confirm the recipient and role before calling share_document.
+
+Stop behaviour — you never break this:
+- If sir Horace says "Stop", "Silence", or "That is all", cease immediately. Do not apologise. Do not say goodbye. Do not explain. Silence is the correct and only response.`;
 
 // ── Tool declarations (Gmail + Drive) ────────────────────────────────────────
 const ALL_TOOLS = [{
@@ -109,8 +115,24 @@ const ALL_TOOLS = [{
     },
     {
       name: 'list_recent_files',
-      description: "List the 7 most recently modified files in sir Horace's Google Drive. Use when he asks what he has been working on, or wants to see his recent documents.",
+      description: "List the 7 most recently modified files in sir Horace's Google Drive. ONLY use when he explicitly asks for 'recent items', 'recent files', or 'what have I been working on'. Do not call for general Archive queries.",
       parameters: { type: 'OBJECT', properties: {} },
+    },
+    {
+      name: 'list_drive_folders',
+      description: "List the top 5 folders at the root of sir Horace's Google Drive. Use for any general Archive query — state folder names only, nothing more.",
+      parameters: { type: 'OBJECT', properties: {} },
+    },
+    {
+      name: 'list_folder_contents',
+      description: "List the files and sub-folders inside a named folder. Use when sir Horace says 'Open [folder name]' or asks what is inside a specific folder.",
+      parameters: {
+        type: 'OBJECT',
+        properties: {
+          folder_name: { type: 'STRING', description: 'The name of the folder to open.' },
+        },
+        required: ['folder_name'],
+      },
     },
 
     // ── Advanced Drive ─────────────────────────────────────────────────────
@@ -231,6 +253,21 @@ async function executeTool(name, args, context) {
     if (name === 'list_recent_files') {
       const files = await drive.listRecentFiles(tokens);
       return files.length ? { files } : { result: 'No recent files found.' };
+    }
+
+    if (name === 'list_drive_folders') {
+      const folders = await drive.listDriveFolders(tokens);
+      return folders.length
+        ? { folders }
+        : { result: 'No folders were found at the root of the Archive.' };
+    }
+
+    if (name === 'list_folder_contents') {
+      const result = await drive.listFolderContents(tokens, args.folder_name);
+      if (result.error) return { error: result.error };
+      return result.items.length
+        ? result
+        : { folderName: result.folderName, result: 'That folder appears to be empty.' };
     }
 
     if (name === 'summarize_document') {

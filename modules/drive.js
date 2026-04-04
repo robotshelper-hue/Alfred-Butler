@@ -167,6 +167,63 @@ async function getDocumentContent(tokens, fileId) {
 }
 
 /**
+ * List the top 5 folders at the root of sir Horace's Drive.
+ * Returns an array of { id, name } — names only for the verbal report.
+ */
+async function listDriveFolders(tokens) {
+  const drive = google.drive({ version: 'v3', auth: createAuth(tokens) });
+
+  const res = await drive.files.list({
+    pageSize: 5,
+    orderBy: 'name',
+    q: "mimeType='application/vnd.google-apps.folder' and 'root' in parents and trashed=false",
+    fields: 'files(id, name)',
+  });
+
+  return (res.data.files || []).map(f => ({
+    id:   f.id,
+    name: sanitise(f.name),
+  }));
+}
+
+/**
+ * List the files and sub-folders inside a named folder.
+ * Returns up to 10 items: { id, name, type }.
+ */
+async function listFolderContents(tokens, folderName) {
+  const drive = google.drive({ version: 'v3', auth: createAuth(tokens) });
+  const safe  = folderName.replace(/'/g, "\\'");
+
+  // Find the folder
+  const folderSearch = await drive.files.list({
+    pageSize: 1,
+    q: `mimeType='application/vnd.google-apps.folder' and name='${safe}' and trashed=false`,
+    fields: 'files(id, name)',
+  });
+
+  const folders = folderSearch.data.files || [];
+  if (!folders.length) return { error: `No folder named "${folderName}" was found.` };
+
+  const folderId = folders[0].id;
+
+  const res = await drive.files.list({
+    pageSize: 10,
+    orderBy: 'modifiedTime desc',
+    q: `'${folderId}' in parents and trashed=false`,
+    fields: 'files(id, name, mimeType)',
+  });
+
+  return {
+    folderName: sanitise(folders[0].name),
+    items: (res.data.files || []).map(f => ({
+      id:   f.id,
+      name: sanitise(f.name),
+      type: friendlyType(f.mimeType),
+    })),
+  };
+}
+
+/**
  * Create a new Google Doc with a title and plain-text body.
  * Returns { documentId, name, webViewLink }
  */
@@ -346,6 +403,8 @@ async function shareDocument(tokens, fileId, email, role) {
 
 module.exports = {
   listRecentFiles,
+  listDriveFolders,
+  listFolderContents,
   searchFiles,
   getDocumentContent,
   createFormattedDoc,
