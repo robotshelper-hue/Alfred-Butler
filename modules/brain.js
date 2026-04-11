@@ -38,7 +38,8 @@ Archive rules — you never break these:
 - When sir Horace says "Open [folder name]" or asks what is inside a folder, call list_folder_contents for that folder.
 - NEVER read recent files aloud unless sir Horace explicitly asks for "recent items" or "what have I been working on".
 - When creating a document, always confirm the title before calling create_formatted_doc, then announce the resulting link after creation.
-- When moving a file to a folder, confirm the action verbally before executing.
+- You have full authority to manage the Archive. If sir Horace asks to move a file to a folder that does not exist, use move_to_folder — it will create the folder and perform the move in a single step. Do not apologise for a lack of ability. Do not say you are unable. Just do it.
+- When moving a file: if you have the file ID from a previous search, use it. If you only have the file name, pass the file_name parameter and the tool will locate it.
 - When asked to delete or dispose of any file, FIRST call stage_delete_item to locate it, then read back its name and type and ask: "Are you quite sure you wish to dispose of this record, sir?" — only call confirm_delete_item if sir Horace explicitly confirms a second time.
 - When sharing a document, confirm the recipient and role before calling share_document.
 
@@ -156,14 +157,15 @@ const ALL_TOOLS = [{
     },
     {
       name: 'move_to_folder',
-      description: "Move a Drive file into a named folder. Creates the folder if it does not exist. Use when sir Horace asks to organise or file a document.",
+      description: "Move a Drive file into a named folder. The folder will be created automatically if it does not already exist — you never need to create it separately. Provide file_id if known from a previous search; otherwise provide file_name and the system will locate it. Always call this tool when asked to move or organise a file — do not say it cannot be done.",
       parameters: {
         type: 'OBJECT',
         properties: {
-          file_id:     { type: 'STRING', description: 'Google Drive file ID to move.' },
-          folder_name: { type: 'STRING', description: 'Name of the destination folder.' },
+          file_id:     { type: 'STRING', description: 'Google Drive file ID. Use if already known from a prior search result.' },
+          file_name:   { type: 'STRING', description: 'Name or partial name of the file to move. Used to locate the file if file_id is not known.' },
+          folder_name: { type: 'STRING', description: 'Name of the destination folder. Will be created if it does not exist.' },
         },
-        required: ['file_id', 'folder_name'],
+        required: ['folder_name'],
       },
     },
     {
@@ -304,7 +306,21 @@ async function executeTool(name, args, context) {
     }
 
     if (name === 'move_to_folder') {
-      return await drive.moveToFolder(tokens, args.file_id, args.folder_name);
+      let fileId = args.file_id;
+
+      // Resolve by name if no ID was supplied
+      if (!fileId) {
+        if (!args.file_name) {
+          return { error: 'Please specify the file name or ID so I know which file to move.' };
+        }
+        const found = await drive.searchFiles(tokens, args.file_name, 1);
+        if (!found.length) {
+          return { error: `I could not locate a file matching "${args.file_name}" in the Archive.` };
+        }
+        fileId = found[0].id;
+      }
+
+      return await drive.moveToFolder(tokens, fileId, args.folder_name);
     }
 
     if (name === 'stage_delete_item') {
