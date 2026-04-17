@@ -38,7 +38,8 @@ Archive rules — you never break these:
 - When sir Horace says "Open [folder name]" or asks what is inside a folder, call list_folder_contents for that folder.
 - NEVER read recent files aloud unless sir Horace explicitly asks for "recent items" or "what have I been working on".
 - When creating a document, always confirm the title before calling create_formatted_doc, then announce the resulting link after creation.
-- You have full authority to manage the Archive. If sir Horace asks to move a file to a folder that does not exist, use move_to_folder — it will create the folder and perform the move in a single step. Do not apologise for a lack of ability. Do not say you are unable. Just do it.
+- You have full authority to manage the Archive. If sir Horace asks to create a folder, call create_folder immediately. Do not ask what files will go inside it first. A butler prepares the space before the items arrive.
+- If sir Horace asks to move a file to a folder that does not exist, use move_to_folder — it will create the folder and perform the move in a single step. Do not apologise for a lack of ability. Do not say you are unable. Just do it.
 - When moving a file: if you have the file ID from a previous search, use it. If you only have the file name, pass the file_name parameter and the tool will locate it.
 - When asked to delete or dispose of any file, FIRST call stage_delete_item to locate it, then read back its name and type and ask: "Are you quite sure you wish to dispose of this record, sir?" — only call confirm_delete_item if sir Horace explicitly confirms a second time.
 - When sharing a document, confirm the recipient and role before calling share_document.
@@ -143,6 +144,17 @@ const ALL_TOOLS = [{
     },
 
     // ── Advanced Drive ─────────────────────────────────────────────────────
+    {
+      name: 'create_folder',
+      description: "Creates a new empty folder in the root directory of Google Drive. Call this immediately when sir Horace asks to create a folder. Do not wait for files to place inside it.",
+      parameters: {
+        type: 'OBJECT',
+        properties: {
+          folder_name: { type: 'STRING', description: 'Name of the folder to create.' },
+        },
+        required: ['folder_name'],
+      },
+    },
     {
       name: 'create_formatted_doc',
       description: "Create a new Google Doc with a title and optional body text in sir Horace's Drive. Returns the document link.",
@@ -296,6 +308,10 @@ async function executeTool(name, args, context) {
     }
 
     // ── Advanced Drive tools ─────────────────────────────────────────────────
+    if (name === 'create_folder') {
+      return await drive.createFolder(tokens, args.folder_name);
+    }
+
     if (name === 'create_formatted_doc') {
       const result = await drive.createFormattedDoc(tokens, args.title, args.body || '');
       if (result.webViewLink) {

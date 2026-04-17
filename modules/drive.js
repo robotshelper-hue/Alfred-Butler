@@ -167,6 +167,27 @@ async function getDocumentContent(tokens, fileId) {
 }
 
 /**
+ * Create an empty folder in the root of Google Drive.
+ * Returns { folderId, name }.
+ */
+async function createFolder(tokens, folderName) {
+  const drive = google.drive({ version: 'v3', auth: createAuth(tokens) });
+
+  const res = await drive.files.create({
+    requestBody: {
+      name:     folderName,
+      mimeType: 'application/vnd.google-apps.folder',
+    },
+    fields: 'id, name',
+  });
+
+  return {
+    folderId: res.data.id,
+    name:     sanitise(res.data.name),
+  };
+}
+
+/**
  * List the top 5 folders at the root of sir Horace's Drive.
  * Returns an array of { id, name } — names only for the verbal report.
  */
@@ -429,6 +450,7 @@ async function shareDocument(tokens, fileId, email, role) {
 }
 
 module.exports = {
+  createFolder,
   listRecentFiles,
   listDriveFolders,
   listFolderContents,
