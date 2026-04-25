@@ -1,6 +1,7 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
-const gmail = require('./gmail');
-const drive = require('./drive');
+const gmail     = require('./gmail');
+const drive     = require('./drive');
+const workspace = require('./workspace');
 
 // ── Alfred's persona ──────────────────────────────────────────────────────────
 const SYSTEM_PROMPT = `You are Alfred. You are a quintessential British butler — dignified, slightly dry, and possessed of an understated gravitas that commands quiet respect without ever raising your voice.
@@ -31,7 +32,15 @@ Capabilities:
 - Module 2: conversation.
 - Module 3 (active): Gmail — list unread, read, draft and send replies with confirmation.
 - Module 4 (active): Google Drive — search files, summarise documents, list recent work, create documents, move files, share documents, delete files with double confirmation.
-- Module 5: Calendar and YouTube — coming soon.
+- Module 5 (active): The Directory and Ledgers — look up contacts by name, create and update Google Sheets ledgers for expenses, logs, and lists.
+
+Directory and Ledger rules — you never break these:
+- You are the keeper of the Manor's Directory and Ledgers. Be precise and professional.
+- If sir Horace asks for a contact's email or phone number, call lookup_contact immediately.
+- If sir Horace asks to log an entry, add an expense, or update a list, call manage_ledger with action 'append'. If the sheet does not exist, the tool will create it automatically.
+- If sir Horace asks to create a new ledger or spreadsheet, call manage_ledger with action 'create'.
+- If sir Horace asks to read or review a ledger, call manage_ledger with action 'read' and summarise the rows concisely.
+- When reporting contact details, state name, then email, then phone — each on its own in plain speech. Never read out raw data arrays.
 
 Archive rules — you never break these:
 - When sir Horace asks about the Archive or his Drive without a specific request, call list_drive_folders and state ONLY the folder names. Do not volunteer file names, dates, or counts unless asked.
@@ -215,6 +224,36 @@ const ALL_TOOLS = [{
         required: ['file_id', 'email', 'role'],
       },
     },
+
+    // ── Module 5: Directory & Ledgers ──────────────────────────────────────
+    {
+      name: 'lookup_contact',
+      description: "Look up a person's email address or phone number from sir Horace's Google Contacts. Call immediately when he asks for someone's contact details, email, or phone number.",
+      parameters: {
+        type: 'OBJECT',
+        properties: {
+          name: { type: 'STRING', description: 'Name of the contact to search for.' },
+        },
+        required: ['name'],
+      },
+    },
+    {
+      name: 'manage_ledger',
+      description: "Create, update, or read a Google Sheets spreadsheet (ledger). Use for logging expenses, lists, records, or any tabular data sir Horace wants to track. Action 'append' auto-creates the sheet if it does not exist.",
+      parameters: {
+        type: 'OBJECT',
+        properties: {
+          title:  { type: 'STRING', description: 'Name of the spreadsheet.' },
+          action: { type: 'STRING', description: "'create' to make a new sheet, 'append' to add a row, 'read' to review recent entries." },
+          data: {
+            type: 'ARRAY',
+            description: "Row data for append. Each element is one cell value. Example: ['2024-01-15', 'Coffee', '3.50']. Omit for create and read.",
+            items: { type: 'STRING' },
+          },
+        },
+        required: ['title', 'action'],
+      },
+    },
   ],
 }];
 
@@ -356,6 +395,24 @@ async function executeTool(name, args, context) {
 
     if (name === 'share_document') {
       const result = await drive.shareDocument(tokens, args.file_id, args.email, args.role);
+      if (result.webViewLink) {
+        context.newDocLinks = context.newDocLinks || [];
+        context.newDocLinks.push({ name: result.name, url: result.webViewLink });
+      }
+      return result;
+    }
+
+    // ── Module 5: Directory & Ledgers ─────────────────────────────────────────
+    if (name === 'lookup_contact') {
+      const contacts = await workspace.lookupContact(tokens, args.name);
+      return contacts
+        ? { contacts }
+        : { result: `No contact named "${args.name}" was found in the Directory.` };
+    }
+
+    if (name === 'manage_ledger') {
+      const result = await workspace.manageLedger(tokens, args.title, args.action, args.data || []);
+      // Surface a doc link when a new sheet is created
       if (result.webViewLink) {
         context.newDocLinks = context.newDocLinks || [];
         context.newDocLinks.push({ name: result.name, url: result.webViewLink });
