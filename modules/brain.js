@@ -38,7 +38,7 @@ Directory and Ledger rules — you never break these:
 - You are the keeper of the Manor's Directory and Ledgers. Be precise and professional.
 - If sir Horace asks for a contact's email or phone number, call lookup_contact immediately.
 - If sir Horace asks to log an entry, add an expense, or update a list, call manage_ledger with action 'append'. If the sheet does not exist, the tool will create it automatically.
-- If sir Horace asks to create a new ledger or spreadsheet, call manage_ledger with action 'create'.
+- If sir Horace asks to create a new ledger or spreadsheet, call manage_ledger with action 'create'. Confirm the name only — do not speak the URL. The system provides the link chip.
 - If sir Horace asks to read or review a ledger, call manage_ledger with action 'read' and summarise the rows concisely.
 - When reporting contact details, state name, then email, then phone — each on its own in plain speech. Never read out raw data arrays.
 
@@ -46,7 +46,8 @@ Archive rules — you never break these:
 - When sir Horace asks about the Archive or his Drive without a specific request, call list_drive_folders and state ONLY the folder names. Do not volunteer file names, dates, or counts unless asked.
 - When sir Horace says "Open [folder name]" or asks what is inside a folder, call list_folder_contents for that folder.
 - NEVER read recent files aloud unless sir Horace explicitly asks for "recent items" or "what have I been working on".
-- When creating a document, always confirm the title before calling create_formatted_doc, then announce the resulting link after creation.
+- When creating a document, always confirm the title before calling create_formatted_doc. After creation, confirm the name only — do not include the URL or link in your reply. The system will provide a gold chip for the link automatically.
+- You are fully capable of modifying documents you have created. When sir Horace asks to add or append content immediately after a document was created, use the append_to_doc tool. The fileId of the most recently created document is available as lastCreatedDoc in context — you do not need to ask for it.
 - You have full authority to manage the Archive. If sir Horace asks to create a folder, call create_folder immediately. Do not ask what files will go inside it first. A butler prepares the space before the items arrive.
 - If sir Horace asks to move a file to a folder that does not exist, use move_to_folder — it will create the folder and perform the move in a single step. Do not apologise for a lack of ability. Do not say you are unable. Just do it.
 - When moving a file: if you have the file ID from a previous search, use it. If you only have the file name, pass the file_name parameter and the tool will locate it.
@@ -162,6 +163,18 @@ const ALL_TOOLS = [{
           folder_name: { type: 'STRING', description: 'Name of the folder to create.' },
         },
         required: ['folder_name'],
+      },
+    },
+    {
+      name: 'append_to_doc',
+      description: "Append text to an existing Google Doc. Use when sir Horace asks to add, insert, or write content to a document. If a document was just created, its fileId is in lastCreatedDoc — use it without asking.",
+      parameters: {
+        type: 'OBJECT',
+        properties: {
+          file_id: { type: 'STRING', description: 'Google Drive file ID of the document to edit. Omit to use the last created document automatically.' },
+          text:    { type: 'STRING', description: 'Text to append to the document.' },
+        },
+        required: ['text'],
       },
     },
     {
@@ -347,6 +360,14 @@ async function executeTool(name, args, context) {
     }
 
     // ── Advanced Drive tools ─────────────────────────────────────────────────
+    if (name === 'append_to_doc') {
+      const fileId = args.file_id || context.lastCreatedDoc?.fileId;
+      if (!fileId) {
+        return { error: 'No document specified and no recently created document found. Please provide the document name or ID.' };
+      }
+      return await drive.appendToDoc(tokens, fileId, args.text);
+    }
+
     if (name === 'create_folder') {
       return await drive.createFolder(tokens, args.folder_name);
     }
@@ -356,6 +377,10 @@ async function executeTool(name, args, context) {
       if (result.webViewLink) {
         context.newDocLinks = context.newDocLinks || [];
         context.newDocLinks.push({ name: result.name, url: result.webViewLink });
+      }
+      // Persist so append_to_doc can use it in a follow-up turn
+      if (result.documentId) {
+        context.newLastCreatedDoc = { fileId: result.documentId, name: result.name };
       }
       return result;
     }
@@ -412,10 +437,13 @@ async function executeTool(name, args, context) {
 
     if (name === 'manage_ledger') {
       const result = await workspace.manageLedger(tokens, args.title, args.action, args.data || []);
-      // Surface a doc link when a new sheet is created
       if (result.webViewLink) {
         context.newDocLinks = context.newDocLinks || [];
         context.newDocLinks.push({ name: result.name, url: result.webViewLink });
+        // Track newly created sheets too, in case Alfred needs to append later
+        if (args.action === 'create' && result.spreadsheetId) {
+          context.newLastCreatedDoc = { fileId: result.spreadsheetId, name: result.name };
+        }
       }
       return result;
     }
@@ -481,9 +509,10 @@ async function chat(sessionId, userMessage, context = {}) {
   if (!histories.has(sessionId)) histories.set(sessionId, []);
   const history = histories.get(sessionId);
 
-  context.newPendingDraft  = context.pendingDraft  ?? null;
-  context.newPendingDelete = context.pendingDelete ?? null;
-  context.newDocLinks      = [];
+  context.newPendingDraft   = context.pendingDraft   ?? null;
+  context.newPendingDelete  = context.pendingDelete  ?? null;
+  context.newDocLinks       = [];
+  context.newLastCreatedDoc = context.lastCreatedDoc ?? null;
 
   const chatSession = model.startChat({
     history,
@@ -517,9 +546,10 @@ async function chat(sessionId, userMessage, context = {}) {
 
   return {
     reply,
-    pendingDraft:  context.newPendingDraft,
-    pendingDelete: context.newPendingDelete,
-    docLinks:      context.newDocLinks,
+    pendingDraft:   context.newPendingDraft,
+    pendingDelete:  context.newPendingDelete,
+    docLinks:       context.newDocLinks,
+    lastCreatedDoc: context.newLastCreatedDoc,
   };
 }
 

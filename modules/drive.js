@@ -167,6 +167,38 @@ async function getDocumentContent(tokens, fileId) {
 }
 
 /**
+ * Append text to an existing Google Doc using batchUpdate.
+ * Inserts at the end of the document body.
+ * Returns { appended: true, name }.
+ */
+async function appendToDoc(tokens, fileId, text) {
+  const auth  = createAuth(tokens);
+  const docs  = google.docs({ version: 'v1', auth });
+  const drive = google.drive({ version: 'v3', auth });
+
+  // Fetch document to find the correct insertion index
+  const doc      = await docs.documents.get({ documentId: fileId });
+  const content  = doc.data.body.content;
+  // The last structural element marks the end-of-segment; insert just before it
+  const endIndex = content[content.length - 1].endIndex - 1;
+
+  await docs.documents.batchUpdate({
+    documentId: fileId,
+    requestBody: {
+      requests: [{
+        insertText: {
+          location: { index: endIndex },
+          text: '\n' + text.trim(),
+        },
+      }],
+    },
+  });
+
+  const meta = await drive.files.get({ fileId, fields: 'id, name' });
+  return { appended: true, name: sanitise(meta.data.name) };
+}
+
+/**
  * Create an empty folder in the root of Google Drive.
  * Returns { folderId, name }.
  */
@@ -450,6 +482,7 @@ async function shareDocument(tokens, fileId, email, role) {
 }
 
 module.exports = {
+  appendToDoc,
   createFolder,
   listRecentFiles,
   listDriveFolders,

@@ -162,20 +162,22 @@ app.post('/api/alfred/chat', requireAuth, async (req, res) => {
 
   try {
     const context = {
-      tokens:        req.session.tokens        || null,
-      pendingDraft:  req.session.pendingDraft  || null,
-      pendingDelete: req.session.pendingDelete || null,
+      tokens:         req.session.tokens         || null,
+      pendingDraft:   req.session.pendingDraft   || null,
+      pendingDelete:  req.session.pendingDelete  || null,
+      lastCreatedDoc: req.session.lastCreatedDoc || null,
     };
 
-    const { reply, pendingDraft, pendingDelete, docLinks } = await brain.chat(
+    const { reply, pendingDraft, pendingDelete, docLinks, lastCreatedDoc } = await brain.chat(
       req.session.user.id,
       message.trim(),
       context
     );
 
     // Persist updated state in session
-    req.session.pendingDraft  = pendingDraft  || null;
-    req.session.pendingDelete = pendingDelete || null;
+    req.session.pendingDraft   = pendingDraft   || null;
+    req.session.pendingDelete  = pendingDelete  || null;
+    req.session.lastCreatedDoc = lastCreatedDoc || null;
 
     res.json({
       reply,
