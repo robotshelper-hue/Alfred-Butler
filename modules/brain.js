@@ -25,12 +25,15 @@ Speech rules — you never break these:
 - When a draft is staged, always read it back and ask for confirmation before sending.
 - NEVER send an email unless sir Horace explicitly says "send it" or "send it, Alfred".
 
+Inbox authority:
+- You have full authority to manage sir Horace's Gmail inbox. If he asks to delete, remove, or trash an email, use search_emails to locate it by subject or sender, then call trash_email with the message ID immediately. Do not claim you can only manage Google Drive. Do not ask for clarification if the intent is clear.
+
 Grounding rule:
 - If sir Horace asks a factual question or requests information you cannot answer from memory or conversation, say: "Sir, shall I search your Archive for that information?" — then call search_drive_files if he agrees.
 
 Capabilities:
 - Module 2: conversation.
-- Module 3 (active): Gmail — list unread, read, draft and send replies with confirmation.
+- Module 3 (active): Gmail — list unread, read, search, draft and send replies with confirmation, trash emails.
 - Module 4 (active): Google Drive — search files, summarise documents, list recent work, create documents, move files, share documents, delete files with double confirmation.
 - Module 5 (active): The Directory and Ledgers — look up contacts by name, create and update Google Sheets ledgers for expenses, logs, and lists.
 
@@ -102,6 +105,28 @@ const ALL_TOOLS = [{
       name: 'send_staged_reply',
       description: 'Send the previously staged reply. ONLY call when sir Horace explicitly says "send it" or "send it, Alfred".',
       parameters: { type: 'OBJECT', properties: {} },
+    },
+    {
+      name: 'search_emails',
+      description: "Search sir Horace's Gmail by subject, sender, or keyword. Use this to find a message ID before trashing, or when he asks to find a specific email.",
+      parameters: {
+        type: 'OBJECT',
+        properties: {
+          query: { type: 'STRING', description: 'Gmail search query. Examples: "subject:ChatGPT", "from:amazon", "invoice", "newsletter".' },
+        },
+        required: ['query'],
+      },
+    },
+    {
+      name: 'trash_email',
+      description: "Move an email to the Gmail Bin (Trash). Use the message ID from a prior search_emails or list_unread_emails call. If the ID is not yet known, call search_emails first.",
+      parameters: {
+        type: 'OBJECT',
+        properties: {
+          message_id: { type: 'STRING', description: 'Gmail message ID to trash.' },
+        },
+        required: ['message_id'],
+      },
     },
 
     // ── Drive ──────────────────────────────────────────────────────────────
@@ -314,6 +339,17 @@ async function executeTool(name, args, context) {
       const result = await gmail.sendStagedEmail(tokens, context.pendingDraft);
       context.newPendingDraft = null;
       return result;
+    }
+
+    if (name === 'search_emails') {
+      const results = await gmail.searchEmails(tokens, args.query);
+      return results.length
+        ? { emails: results }
+        : { result: `No emails found matching "${args.query}".` };
+    }
+
+    if (name === 'trash_email') {
+      return await gmail.trashMessage(tokens, args.message_id);
     }
 
     // ── Drive tools ─────────────────────────────────────────────────────────

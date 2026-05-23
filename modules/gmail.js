@@ -2,10 +2,12 @@
  * Module 3 — Gmail Integration
  *
  * Provides:
- *   listUnreadEmails(tokens)          → last 5 unread, sender + subject only
- *   findEmailBySender(tokens, name)   → full body of most recent email from sender
- *   stageDraft(tokens, name, text)    → stage a reply (does NOT send)
- *   sendStagedEmail(tokens, draft)    → send a previously staged draft
+ *   listUnreadEmails(tokens)              → last 5 unread, sender + subject only
+ *   findEmailBySender(tokens, name)       → full body of most recent email from sender
+ *   searchEmails(tokens, query)           → find emails by subject, sender, or keyword
+ *   stageDraft(tokens, name, text)        → stage a reply (does NOT send)
+ *   sendStagedEmail(tokens, draft)        → send a previously staged draft
+ *   trashMessage(tokens, messageId)       → move a message to the bin
  *
  * TEXT-ONLY rule: email bodies are stripped of HTML, emojis, and markdown
  * before being passed to Alfred so he never reads them aloud verbatim.
@@ -151,6 +153,73 @@ async function findEmailBySender(tokens, senderName) {
 }
 
 /**
+ * Search emails by Gmail query string (supports subject:, from:, keywords, etc.).
+ * Returns up to 5 matches with id, subject, fromName.
+ */
+async function searchEmails(tokens, query) {
+  const gmail = google.gmail({ version: 'v1', auth: createAuth(tokens) });
+
+  const list = await gmail.users.messages.list({
+    userId: 'me',
+    q: query,
+    maxResults: 5,
+  });
+
+  const messages = list.data.messages || [];
+  if (!messages.length) return [];
+
+  const details = await Promise.all(messages.map(msg =>
+    gmail.users.messages.get({
+      userId: 'me',
+      id: msg.id,
+      format: 'metadata',
+      metadataHeaders: ['From', 'Subject', 'Date'],
+    })
+  ));
+
+  return details.map(({ data }) => {
+    const headers  = data.payload?.headers || [];
+    const from     = getHeader(headers, 'From');
+    const fromName = from.replace(/<[^>]+>/, '').trim() || from;
+    return {
+      id:       data.id,
+      threadId: data.threadId,
+      fromName: sanitiseForSpeech(fromName),
+      subject:  sanitiseForSpeech(getHeader(headers, 'Subject')),
+      date:     getHeader(headers, 'Date'),
+    };
+  });
+}
+
+/**
+ * Move a message to the user's Gmail Bin (Trash).
+ * Returns { trashed: true, subject, fromName }.
+ */
+async function trashMessage(tokens, messageId) {
+  const gmail = google.gmail({ version: 'v1', auth: createAuth(tokens) });
+
+  // Fetch metadata for the confirmation message
+  const { data } = await gmail.users.messages.get({
+    userId: 'me',
+    id: messageId,
+    format: 'metadata',
+    metadataHeaders: ['From', 'Subject'],
+  });
+
+  await gmail.users.messages.trash({ userId: 'me', id: messageId });
+
+  const headers  = data.payload?.headers || [];
+  const from     = getHeader(headers, 'From');
+  const fromName = from.replace(/<[^>]+>/, '').trim() || from;
+
+  return {
+    trashed:  true,
+    subject:  sanitiseForSpeech(getHeader(headers, 'Subject')),
+    fromName: sanitiseForSpeech(fromName),
+  };
+}
+
+/**
  * Stage a reply — locate the email, store the pending draft in memory.
  * Does NOT send anything. Returns the staged draft object.
  */
@@ -192,4 +261,4 @@ async function sendStagedEmail(tokens, draft) {
   return { sent: true, to: draft.to, subject: draft.subject };
 }
 
-module.exports = { listUnreadEmails, findEmailBySender, stageDraft, sendStagedEmail };
+module.exports = { listUnreadEmails, findEmailBySender, searchEmails, stageDraft, sendStagedEmail, trashMessage };
