@@ -73,16 +73,21 @@ function sanitiseForSpeech(text) {
 // ── Gmail API calls ───────────────────────────────────────────────────────────
 
 /**
- * List the 5 most recent unread emails (metadata only — no body fetch).
+ * List the 5 most recent unread emails from the last 7 days (metadata only).
+ * Results are sorted newest-first by internalDate.
  * Returns array of { id, threadId, from, fromName, subject, date, snippet }
  */
 async function listUnreadEmails(tokens) {
   const gmail = google.gmail({ version: 'v1', auth: createAuth(tokens) });
 
+  // Build an after: date string 7 days ago so old receipts/newsletters are excluded
+  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const afterStr = `${since.getFullYear()}/${String(since.getMonth() + 1).padStart(2, '0')}/${String(since.getDate()).padStart(2, '0')}`;
+
   const list = await gmail.users.messages.list({
     userId: 'me',
-    q: 'is:unread in:inbox',
-    maxResults: 5,
+    q: `is:unread in:inbox after:${afterStr}`,
+    maxResults: 10, // fetch extra so sort+slice gives the true 5 newest
   });
 
   const messages = list.data.messages || [];
@@ -97,10 +102,13 @@ async function listUnreadEmails(tokens) {
     })
   ));
 
-  return details.map(({ data }) => {
+  // Sort by internalDate (ms epoch) — newest first — then take top 5
+  details.sort((a, b) => Number(b.data.internalDate) - Number(a.data.internalDate));
+  const top5 = details.slice(0, 5);
+
+  return top5.map(({ data }) => {
     const headers = data.payload?.headers || [];
     const from = getHeader(headers, 'From');
-    // "John Smith <john@example.com>" → "John Smith"
     const fromName = from.replace(/<[^>]+>/, '').trim() || from;
     return {
       id: data.id,
@@ -176,6 +184,9 @@ async function searchEmails(tokens, query) {
       metadataHeaders: ['From', 'Subject', 'Date'],
     })
   ));
+
+  // Sort newest first by internalDate
+  details.sort((a, b) => Number(b.data.internalDate) - Number(a.data.internalDate));
 
   return details.map(({ data }) => {
     const headers  = data.payload?.headers || [];

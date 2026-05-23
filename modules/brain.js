@@ -559,10 +559,17 @@ async function chat(sessionId, userMessage, context = {}) {
 
   let result = await chatSession.sendMessage(userMessage);
 
+  // Accumulate function-call intermediates so the next turn has full email/doc context
+  const fcTurns = [];
+
   // Function-calling loop — max 4 rounds
   for (let i = 0; i < 4; i++) {
     const calls = getFunctionCalls(result.response);
     if (!calls.length) break;
+
+    // Persist the model's functionCall parts (needed for history continuity)
+    const modelParts = result.response.candidates?.[0]?.content?.parts || [];
+    if (modelParts.length) fcTurns.push({ role: 'model', parts: modelParts });
 
     const responses = await Promise.all(calls.map(async call => ({
       functionResponse: {
@@ -571,14 +578,20 @@ async function chat(sessionId, userMessage, context = {}) {
       },
     })));
 
+    // Function responses are 'user' role in Gemini history
+    fcTurns.push({ role: 'user', parts: responses });
+
     result = await chatSession.sendMessage(responses);
   }
 
   const reply = result.response.text();
 
+  // Commit: user message → any function-call pairs → final model reply
   history.push({ role: 'user',  parts: [{ text: userMessage }] });
+  history.push(...fcTurns);
   history.push({ role: 'model', parts: [{ text: reply }] });
-  if (history.length > 40) history.splice(0, 2);
+  // Trim oldest pairs until within limit
+  while (history.length > 40) history.splice(0, 2);
 
   return {
     reply,
