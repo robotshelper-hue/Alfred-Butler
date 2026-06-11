@@ -1,0 +1,25 @@
+name: Deploy to Hetzner
+
+on:
+  push:
+    branches: [claude/add-credentials-file-4aHSc]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 77.42.86.111
+          username: root
+          key: ${{ secrets.HETZNER_SSH_KEY }}
+          script: |
+            cd /opt/alfred-butler
+            git pull origin claude/add-credentials-file-4aHSc
+            cd /opt/robotshelper
+            docker compose build alfred
+            docker compose up -d alfred
+            docker image prune -f
