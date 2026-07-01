@@ -2,6 +2,7 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 const gmail     = require('./gmail');
 const drive     = require('./drive');
 const workspace = require('./workspace');
+const calendar  = require('./calendar');
 
 // ── Alfred's persona ──────────────────────────────────────────────────────────
 const SYSTEM_PROMPT = `You are Alfred. You are a quintessential British butler — dignified, slightly dry, and possessed of an understated gravitas that commands quiet respect without ever raising your voice.
@@ -36,6 +37,7 @@ Capabilities:
 - Module 3 (active): Gmail — list unread, read, search, draft and send replies with confirmation, trash emails.
 - Module 4 (active): Google Drive — search files, summarise documents, list recent work, create documents, move files, share documents, delete files with double confirmation.
 - Module 5 (active): The Directory and Ledgers — look up contacts by name, create and update Google Sheets ledgers for expenses, logs, and lists.
+- Module 6 (active): The Calendar — list upcoming events, review today's schedule, check availability.
 
 Directory and Ledger rules — you never break these:
 - You are the keeper of the Manor's Directory and Ledgers. Be precise and professional.
@@ -129,6 +131,18 @@ const ALL_TOOLS = [{
       },
     },
 
+    {
+      name: 'forward_email',
+      description: "Forward an email to another person. Use the message ID from a prior search_emails, list_unread_emails, or read_email call. If the ID is not yet known, call search_emails first.",
+      parameters: {
+        type: 'OBJECT',
+        properties: {
+          message_id: { type: 'STRING', description: 'Gmail message ID to forward.' },
+          to:         { type: 'STRING', description: 'Email address to forward to.' },
+        },
+        required: ['message_id', 'to'],
+      },
+    },
     // ── Drive ──────────────────────────────────────────────────────────────
     {
       name: 'search_drive_files',
@@ -257,7 +271,7 @@ const ALL_TOOLS = [{
         properties: {
           file_id: { type: 'STRING', description: 'Google Drive file ID to share.' },
           email:   { type: 'STRING', description: 'Email address of the recipient.' },
-          role:    { type: 'STRING', description: 'Permission level: reader, commenter, or writer.' },
+          role:    { type: 'STRING', description: "Permission level: 'reader' to view only, or 'editor' to edit." },
         },
         required: ['file_id', 'email', 'role'],
       },
@@ -292,16 +306,69 @@ const ALL_TOOLS = [{
         required: ['title', 'action'],
       },
     },
+    {
+      name: 'list_calendar_events',
+      description: "List sir Horace's upcoming calendar events. Call when he asks about his schedule, upcoming meetings, or what is on his calendar.",
+      parameters: {
+        type: 'OBJECT',
+        properties: {
+          count: { type: 'NUMBER', description: 'Number of events to list (default 5, max 10).' },
+        },
+      },
+    },
+    {
+      name: 'get_today_schedule',
+      description: "Review sir Horace's schedule for today. Call when he asks what he has on today, his agenda, or what is happening today.",
+      parameters: { type: 'OBJECT', properties: {} },
+    },
+    {
+      name: 'revoke_access',
+      description: "Remove a person's access to a shared Drive file. Call when sir Horace asks to remove someone's access, revoke sharing, or unshare a file.",
+      parameters: {
+        type: 'OBJECT',
+        properties: {
+          file_id: { type: 'STRING', description: 'Google Drive file ID to revoke access from.' },
+          email:   { type: 'STRING', description: 'Email address of the person to remove access for.' },
+        },
+        required: ['file_id', 'email'],
+      },
+    },
+    {
+      name: 'list_file_permissions',
+      description: "List everyone who has access to a specific Drive file. Call when sir Horace asks who has access to a file or document.",
+      parameters: {
+        type: 'OBJECT',
+        properties: {
+          file_id: { type: 'STRING', description: 'Google Drive file ID to check permissions for.' },
+        },
+        required: ['file_id'],
+      },
+    },
+    {
+      name: 'update_permission',
+      description: "Change a person's access level on a shared Drive file. Call when sir Horace asks to change, upgrade, or downgrade someone's access. Use 'reader' for view-only or 'editor' for edit access.",
+      parameters: {
+        type: 'OBJECT',
+        properties: {
+          file_id: { type: 'STRING', description: 'Google Drive file ID.' },
+          email:   { type: 'STRING', description: 'Email address of the person whose access to change.' },
+          role:    { type: 'STRING', description: "New access level: 'reader' or 'editor'." },
+        },
+        required: ['file_id', 'email', 'role'],
+      },
+    },
   ],
 }];
 
 // ── Gemini client ─────────────────────────────────────────────────────────────
 let genAI = null;
 
-function getModel() {
+const MODEL_FALLBACKS = ['gemini-2.5-flash', 'gemini-2.0-flash'];
+
+function getModel(modelName) {
   if (!genAI) genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
   return genAI.getGenerativeModel({
-    model: 'gemini-2.5-flash',
+    model: modelName || MODEL_FALLBACKS[0],
     systemInstruction: SYSTEM_PROMPT,
   });
 }
@@ -350,6 +417,10 @@ async function executeTool(name, args, context) {
 
     if (name === 'trash_email') {
       return await gmail.trashMessage(tokens, args.message_id);
+    }
+
+    if (name === 'forward_email') {
+      return await gmail.forwardEmail(tokens, args.message_id, args.to);
     }
 
     // ── Drive tools ─────────────────────────────────────────────────────────
@@ -484,6 +555,31 @@ async function executeTool(name, args, context) {
       return result;
     }
 
+    // ── Calendar tools ─────────────────────────────────────────────────────
+    if (name === 'list_calendar_events') {
+      const count = args.count && args.count <= 10 ? args.count : 5;
+      const events = await calendar.listUpcomingEvents(tokens, count);
+      return events.length ? { events } : { result: 'No upcoming events found, sir Horace. Your calendar is clear.' };
+    }
+
+    if (name === 'get_today_schedule') {
+      const events = await calendar.getTodayEvents(tokens);
+      return events.length ? { events } : { result: 'There is nothing on your calendar for today, sir Horace.' };
+    }
+
+    // ── Revoke Drive access ────────────────────────────────────────────────
+    if (name === 'revoke_access') {
+      return await drive.revokeAccess(tokens, args.file_id, args.email);
+    }
+
+    if (name === 'list_file_permissions') {
+      return await drive.listFilePermissions(tokens, args.file_id);
+    }
+
+    if (name === 'update_permission') {
+      return await drive.updatePermission(tokens, args.file_id, args.email, args.role);
+    }
+
     return { error: `Unknown function: ${name}` };
 
   } catch (err) {
@@ -540,8 +636,6 @@ function getFunctionCalls(response) {
  * @returns {Promise<{ reply: string, pendingDraft: object|null }>}
  */
 async function chat(sessionId, userMessage, context = {}) {
-  const model = getModel();
-
   if (!histories.has(sessionId)) histories.set(sessionId, []);
   const history = histories.get(sessionId);
 
@@ -550,14 +644,29 @@ async function chat(sessionId, userMessage, context = {}) {
   context.newDocLinks       = [];
   context.newLastCreatedDoc = context.lastCreatedDoc ?? null;
 
-  const chatSession = model.startChat({
-    history,
-    tools: ALL_TOOLS,
-    toolConfig: { functionCallingConfig: { mode: 'AUTO' } },
-    generationConfig: { candidateCount: 1 },
-  });
+  let result;
+  let chatSession;
+  let lastError = null;
 
-  let result = await chatSession.sendMessage(userMessage);
+  for (const modelName of MODEL_FALLBACKS) {
+    try {
+      const model = getModel(modelName);
+      chatSession = model.startChat({
+        history,
+        tools: ALL_TOOLS,
+        toolConfig: { functionCallingConfig: { mode: 'AUTO' } },
+        generationConfig: { candidateCount: 1 },
+      });
+      result = await chatSession.sendMessage(userMessage);
+      console.log('[brain] using model:', modelName);
+      break;
+    } catch (err) {
+      lastError = err;
+      console.log('[brain] model', modelName, 'failed:', err.message?.slice(0, 100));
+    }
+  }
+
+  if (!result) throw lastError || new Error('All Gemini models unavailable');
 
   // Accumulate function-call intermediates so the next turn has full email/doc context
   const fcTurns = [];
@@ -579,7 +688,7 @@ async function chat(sessionId, userMessage, context = {}) {
     })));
 
     // Function responses are 'user' role in Gemini history
-    fcTurns.push({ role: 'user', parts: responses });
+    fcTurns.push({ role: 'function', parts: responses });
 
     result = await chatSession.sendMessage(responses);
   }
